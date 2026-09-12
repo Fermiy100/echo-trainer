@@ -15,6 +15,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { getRussianVoice } from "@/lib/tts";
+import { TermCard } from "@/components/ui/TermCard";
 import styles from "./page.module.css";
 
 function escapeRegExp(value: string) {
@@ -126,6 +127,20 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               onClick={speak}
             />
           </VStack>
+
+          {paragraph.termCards && paragraph.termCards.length > 0 && (
+            <VStack gap={3}>
+              <Heading level={2}>Термины</Heading>
+              <Text type="supporting" color="secondary">
+                Нажми на карточку, чтобы узнать, что значит термин
+              </Text>
+              <div className={styles.termGrid}>
+                {paragraph.termCards.map((card) => (
+                  <TermCard key={card.term} term={card.term} definition={card.definition} />
+                ))}
+              </div>
+            </VStack>
+          )}
 
           <VStack gap={3}>
             <Heading level={2}>Объясни как другу</Heading>

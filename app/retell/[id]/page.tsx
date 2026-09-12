@@ -16,6 +16,7 @@ import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { storeReview } from "@/lib/review-store";
 import { getStudentId } from "@/lib/client-id";
+import { recordLocalAttempt } from "@/lib/local-history";
 import styles from "./page.module.css";
 
 const RECOMMENDED_LIMIT_SECONDS = 90;
@@ -107,11 +108,10 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
       };
       recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
         console.error("retell: SpeechRecognition ошибка", e.error);
-        // "no-speech" — просто тишина между фразами, не повод останавливать запись.
-        // Всё остальное (нет доступа к микрофону, распознавание не поддержано в
-        // рантайме и т.д.) — честно останавливаем, а не оставляем "Слушаю тебя…"
-        // висеть без единого шанса что-то записать.
-        if (e.error === "no-speech") return;
+        // "no-speech"/"aborted" — тишина между фразами или сам перезапуск сессии
+        // (см. onend ниже), не повод останавливать запись. Всё остальное (нет
+        // доступа к микрофону и т.д.) — честно останавливаем.
+        if (e.error === "no-speech" || e.error === "aborted") return;
         recognitionRef.current = null;
         setErrorMessage(
           e.error === "not-allowed" || e.error === "service-not-allowed"
@@ -120,6 +120,20 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
         );
         setFinalText(transcriptRef.current.trim());
         setPhase("reviewing");
+      };
+      recognition.onend = () => {
+        // Браузер сам обрывает сессию распознавания через какое-то время (это
+        // штатное поведение Web Speech API, не ошибка) — если ученик ещё не
+        // нажал "Остановить" (recognitionRef.current всё ещё указывает на этот
+        // же объект), сразу перезапускаем, иначе вторая половина пересказа
+        // молча пропадает, а интерфейс продолжает показывать "Слушаю тебя…".
+        if (recognitionRef.current === recognition) {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.error("retell: не удалось перезапустить распознавание", err);
+          }
+        }
       };
       recognition.start();
       recognitionRef.current = recognition;
@@ -161,6 +175,13 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       storeReview(paragraph.id, data.coveredIndices, data.source);
+      // Пишем и локально: пока Neon не подключён, /api/verify честно ничего не
+      // сохраняет на сервере — без этого история осталась бы вечно пустой.
+      recordLocalAttempt({
+        subject: paragraph.subject || "Без темы",
+        covered_count: data.coveredIndices.length,
+        total_count: paragraph.keyPoints.length,
+      });
       router.push(`/review/${paragraph.id}`);
     } catch (err) {
       // Честно показываем ошибку прямо здесь и даём попробовать снова — вместо

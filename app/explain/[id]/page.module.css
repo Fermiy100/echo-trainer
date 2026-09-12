@@ -26,3 +26,15 @@
   max-width: 640px;
   margin: 0 auto;
 }
+
+.termGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-3, 12px);
+}
+
+@media (max-width: 480px) {
+  .termGrid {
+    grid-template-columns: 1fr;
+  }
+}

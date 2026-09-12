@@ -6,6 +6,10 @@ export type ExplainResult = {
   subject: string | null;
   simplifiedText: string;
   keyTerms: string[];
+  // Карточки-флешкарты по каждому термину (термин на лицевой стороне, простое
+  // определение на обратной) — см. components/ui/TermCard.tsx. Опционально —
+  // модель не всегда добавляет это поле, код должен переживать его отсутствие.
+  termCards?: { term: string; definition: string }[];
   keyPoints: string[];
   analogies: string[];
   // Заполняется только при нескольких фото: сколько страниц реально удалось
