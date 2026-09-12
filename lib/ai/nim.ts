@@ -118,7 +118,7 @@ export async function explainFromImage(imageDataUrls: string[], interest?: strin
   const apiKey = requireApiKey();
 
   if (imageDataUrls.length === 1) {
-    return chatCompletionAsJson<ExplainResult>(
+    const single = await chatCompletionAsJson<ExplainResult>(
       VISION_MODEL,
       [
         { role: "system", content: buildExplainSystemPrompt(interest) },
@@ -132,6 +132,8 @@ export async function explainFromImage(imageDataUrls: string[], interest?: strin
       ],
       apiKey,
     );
+    if (single.unreadable) throw new ProviderError("nim", "Модель пометила фото как нечитаемое");
+    return single;
   }
 
   // Последовательно, не параллельно: пять одновременных запросов к бесплатному
@@ -157,6 +159,7 @@ export async function explainFromImage(imageDataUrls: string[], interest?: strin
     ],
     apiKey,
   );
+  if (result.unreadable) throw new ProviderError("nim", "Модель пометила текст как нечитаемый");
   return { ...result, pagesRead, pagesTotal: imageDataUrls.length };
 }
 

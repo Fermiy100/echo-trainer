@@ -68,6 +68,9 @@ export async function explainFromImage(imageDataUrls: string[], interest?: strin
     ],
     apiKey,
   );
+  if (result.unreadable) {
+    throw new ProviderError("openai", "Модель пометила фото как нечитаемое");
+  }
   return isMulti ? { ...result, pagesRead: imageDataUrls.length, pagesTotal: imageDataUrls.length } : result;
 }
 
