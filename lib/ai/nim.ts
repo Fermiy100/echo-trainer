@@ -14,8 +14,9 @@ const VISION_MODEL = process.env.NVIDIA_NIM_VISION_MODEL || "meta/llama-3.2-11b-
 // запросы, поэтому по умолчанию используем её же — подтверждено рабочим curl-запросом.
 const TEXT_MODEL = process.env.NVIDIA_NIM_TEXT_MODEL || VISION_MODEL;
 // Структурированный JSON-ответ (explain) занимает больше токенов, чем короткий verify —
-// на практике генерация укладывалась в 13-20с, поэтому оставляем запас.
-const TIMEOUT_MS = 35_000;
+// на практике генерация занимала от 13 до 35с (свободный тариф не гарантирует задержку),
+// поэтому оставляем запас побольше, чем самое медленное измеренное значение.
+const TIMEOUT_MS = 50_000;
 
 function requireApiKey(): string {
   const key = process.env.NVIDIA_NIM_API_KEY;

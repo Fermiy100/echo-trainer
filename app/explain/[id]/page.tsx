@@ -22,9 +22,14 @@ function escapeRegExp(value: string) {
 function withHighlightedTerms(text: string, terms: string[]) {
   const cleanTerms = terms.filter((t) => t.trim().length > 0);
   if (cleanTerms.length === 0) return [text];
-  const pattern = new RegExp(`(${cleanTerms.map(escapeRegExp).join("|")})`, "gi");
+  // Термины приходят в начальной форме («фотосинтез»), а в тексте могут стоять
+  // в падеже («фотосинтезом») — захватываем и русское окончание слова, иначе
+  // подсветка обрывается на середине слова.
+  const escaped = cleanTerms.map(escapeRegExp).join("|");
+  const pattern = new RegExp(`((?:${escaped})[а-яёА-ЯЁ]*)`, "gi");
+  const isMatch = new RegExp(`^(?:${escaped})[а-яёА-ЯЁ]*$`, "i");
   return text.split(pattern).map((chunk, i) =>
-    terms.some((t) => t.toLowerCase() === chunk.toLowerCase()) ? (
+    isMatch.test(chunk) ? (
       <Text key={i} type="inherit" color="accent" weight="bold" as="span">
         {chunk}
       </Text>
@@ -70,7 +75,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
           <IconButton label="Назад" icon={<Icon icon="chevronLeft" />} variant="ghost" />
         </Link>
         <Text type="body" weight="bold">
-          {paragraph.subject}
+          {paragraph.subject || "Параграф"}
         </Text>
         <div className={styles.headerSpacer} />
       </div>

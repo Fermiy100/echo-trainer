@@ -37,6 +37,24 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const covered = coveredIndices.length;
   const total = paragraph.keyPoints.length;
   const missed = paragraph.keyPoints.filter((_, i) => !coveredIndices.includes(i));
+  const ratio = total > 0 ? covered / total : 0;
+
+  // Честная обратная связь — это весь смысл приложения, поэтому заголовок
+  // не может быть одинаково бодрым и при 3 из 4, и при 0 из 4.
+  const heading =
+    missed.length === 0
+      ? "Ты назвал всё до единой мысли!"
+      : ratio >= 0.5
+        ? "Почти всё запомнил!"
+        : ratio > 0
+          ? "Есть над чем поработать"
+          : "Пока не совсем — и это нормально";
+  const subtitle =
+    missed.length === 0
+      ? "Отлично поработал — можно двигаться дальше"
+      : ratio > 0
+        ? `Не хватило: «${missed[0]}» — скажи об этом в следующий раз`
+        : "Перечитай объяснение ещё раз и попробуй пересказать заново";
 
   return (
     <div className={styles.page}>
@@ -48,12 +66,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
           <VStack gap={1} hAlign="center">
             <Heading level={1} justify="center">
-              {missed.length === 0 ? "Ты назвал всё до единой мысли!" : "Почти всё запомнил!"}
+              {heading}
             </Heading>
             <Text type="body" color="secondary" justify="center">
-              {missed.length > 0
-                ? `Не хватило: «${missed[0]}» — скажи об этом в следующий раз`
-                : "Отлично поработал — можно двигаться дальше"}
+              {subtitle}
             </Text>
           </VStack>
 

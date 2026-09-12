@@ -33,7 +33,13 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&family=PT+Sans:wght@400;700&display=swap"
         />
       </head>
-      <body>
+      <body
+        style={{
+          background: "var(--color-background-body)",
+          color: "var(--color-text-primary)",
+          minHeight: "100dvh",
+        }}
+      >
         <Theme theme={echoTheme} mode="light">
           {children}
         </Theme>

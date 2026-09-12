@@ -1,6 +1,10 @@
 .page {
   min-height: 100dvh;
   background: var(--color-background-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-6, 24px) var(--spacing-4, 16px);
 }
 
 .shell {

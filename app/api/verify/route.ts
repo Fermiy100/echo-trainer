@@ -37,9 +37,12 @@ export async function POST(req: NextRequest) {
 
   const result = await getVerification(keyPoints, transcript);
 
-  if (typeof subject === "string" && typeof studentId === "string") {
+  if (typeof studentId === "string") {
+    // Если модель не распознала тему — не теряем попытку молча, пишем с
+    // заглушкой, чтобы прогресс ученика не пропадал из истории без следа.
+    const safeSubject = typeof subject === "string" && subject.trim() ? subject : "Без темы";
     try {
-      await saveAttempt(studentId, subject, result.coveredIndices.length, keyPoints.length);
+      await saveAttempt(studentId, safeSubject, result.coveredIndices.length, keyPoints.length);
     } catch (err) {
       // История — не критично для ответа пользователю, не роняем запрос из-за неё
       console.error("verify: не удалось сохранить попытку в историю", err);

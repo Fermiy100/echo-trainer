@@ -5,6 +5,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Divider } from "@astryxdesign/core/Divider";
+import { Link } from "@astryxdesign/core/Link";
 import { AppFrame } from "@/components/shell/AppFrame";
 import { getPilotStats } from "@/lib/db";
 import styles from "./page.module.css";
@@ -103,8 +104,11 @@ export default async function AboutPage() {
         <VStack gap={1}>
           <Heading level={2}>Исходники</Heading>
           <Text type="supporting">
-            Репозиторий проекта появится здесь сразу после публикации на GitHub — ссылку добавим,
-            не будем держать пустую.
+            Весь код открыт на{" "}
+            <Link href="https://github.com/Fermiy100/echo-trainer" isExternalLink>
+              GitHub
+            </Link>{" "}
+            — можно посмотреть, как всё устроено внутри.
           </Text>
         </VStack>
       </VStack>
