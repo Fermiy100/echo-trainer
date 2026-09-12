@@ -30,8 +30,8 @@ export async function getExplanation(imageDataUrls: string[], interest?: string 
     console.error("explain: NIM недоступен, отдаю офлайн-пример", err);
     // DeepSeek не читает картинки — третьего уровня для фото нет, честно уходим
     // на гарантированно рабочий пример вместо голой ошибки.
-    const { subject, simplifiedText, keyTerms, keyPoints, analogies } = MOCK_PARAGRAPH;
-    return { subject, simplifiedText, keyTerms, keyPoints, analogies, source: "offline-example" };
+    const { subject, explanationBlocks, keyTerms, termCards, keyPoints, analogies } = MOCK_PARAGRAPH;
+    return { subject, explanationBlocks, keyTerms, termCards, keyPoints, analogies, source: "offline-example" };
   }
 }
 
@@ -85,4 +85,20 @@ export async function getVerification(keyPoints: string[], transcript: string): 
     console.error("verify: DeepSeek тоже недоступен, считаю по ключевым словам локально", err);
   }
   return { coveredIndices: heuristicVerify(keyPoints, transcript), source: "heuristic" };
+}
+
+export async function getAnswer(explanationText: string, question: string): Promise<string> {
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      return await openai.askQuestion(explanationText, question);
+    } catch (err) {
+      console.error("ask: OpenAI недоступен, пробую NIM", err);
+    }
+  }
+  try {
+    return await nim.askQuestion(explanationText, question);
+  } catch (err) {
+    console.error("ask: NIM тоже недоступен", err);
+    throw err;
+  }
 }

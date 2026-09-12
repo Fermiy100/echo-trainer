@@ -50,6 +50,11 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const transcriptRef = useRef("");
+  // Последний ещё не подтверждённый ("interim") кусок речи — некоторые браузеры
+  // никогда не помечают самую последнюю фразу как isFinal перед остановкой,
+  // и она просто пропадает, если не подстраховаться этим буфером.
+  const interimRef = useRef("");
+  const wasStoppedByUserRef = useRef(false);
   const speechSupported = useRef(getSpeechRecognition() !== null).current;
 
   useEffect(() => {
@@ -75,8 +80,22 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Единая точка фиксации текста: включает и подтверждённую (final) речь, и
+  // ещё не подтверждённый последний кусок (interim) — некоторые браузеры так и
+  // не помечают самую последнюю фразу как isFinal перед остановкой, и раньше
+  // она просто пропадала бесследно.
+  const commitTranscript = (message?: string) => {
+    const combined = `${transcriptRef.current} ${interimRef.current}`.trim();
+    setFinalText(combined);
+    interimRef.current = "";
+    if (message) setErrorMessage(message);
+    setPhase("reviewing");
+  };
+
   const startRecording = () => {
     transcriptRef.current = "";
+    interimRef.current = "";
+    wasStoppedByUserRef.current = false;
     setLiveText("");
     setElapsed(0);
     setErrorMessage(null);
@@ -102,6 +121,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
           else interimChunk += text;
         }
         if (finalChunk) transcriptRef.current += ` ${finalChunk}`;
+        interimRef.current = interimChunk;
         // Показываем и уже распознанное, и то, что распознаётся прямо сейчас —
         // так ученик сразу видит, слушает его приложение или нет.
         setLiveText(`${transcriptRef.current} ${interimChunk}`.trim());
@@ -113,26 +133,33 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
         // доступа к микрофону и т.д.) — честно останавливаем.
         if (e.error === "no-speech" || e.error === "aborted") return;
         recognitionRef.current = null;
-        setErrorMessage(
+        commitTranscript(
           e.error === "not-allowed" || e.error === "service-not-allowed"
             ? "Нет доступа к микрофону — разреши его в браузере или впиши пересказ текстом"
             : "Распознавание речи не сработало — впиши пересказ текстом",
         );
-        setFinalText(transcriptRef.current.trim());
-        setPhase("reviewing");
       };
       recognition.onend = () => {
-        // Браузер сам обрывает сессию распознавания через какое-то время (это
-        // штатное поведение Web Speech API, не ошибка) — если ученик ещё не
-        // нажал "Остановить" (recognitionRef.current всё ещё указывает на этот
-        // же объект), сразу перезапускаем, иначе вторая половина пересказа
-        // молча пропадает, а интерфейс продолжает показывать "Слушаю тебя…".
         if (recognitionRef.current === recognition) {
+          // Браузер сам обрывает сессию распознавания через какое-то время (это
+          // штатное поведение Web Speech API, не ошибка, происходит примерно
+          // раз в минуту) — ученик ещё не нажал "Остановить", значит нужно сразу
+          // перезапустить, иначе вторая половина пересказа молча пропадает.
           try {
             recognition.start();
           } catch (err) {
             console.error("retell: не удалось перезапустить распознавание", err);
+            commitTranscript();
           }
+          return;
+        }
+        if (wasStoppedByUserRef.current) {
+          // Настоящая остановка по кнопке — по спецификации Web Speech API все
+          // финальные результаты уже доставлены к этому моменту (в отличие от
+          // немедленного чтения transcriptRef прямо в обработчике клика, которое
+          // могло проскочить последний ещё не подтверждённый кусок речи).
+          wasStoppedByUserRef.current = false;
+          commitTranscript();
         }
       };
       recognition.start();
@@ -147,10 +174,25 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   };
 
   const stopRecording = () => {
-    recognitionRef.current?.stop();
+    if (!recognitionRef.current) {
+      // Уже остановлено (например, только что сработала ошибка) — ждать нечего.
+      commitTranscript();
+      return;
+    }
+    wasStoppedByUserRef.current = true;
+    recognitionRef.current.stop();
     recognitionRef.current = null;
-    setFinalText(transcriptRef.current.trim());
-    setPhase("reviewing");
+    // Текст фиксируется в onend (см. выше), а не здесь — .stop() завершает
+    // сессию асинхронно, и последний ещё не подтверждённый кусок речи мог
+    // прийти уже ПОСЛЕ немедленного чтения transcriptRef в этом обработчике.
+    // Подстраховка на случай, если onend по какой-то причине вообще не придёт —
+    // не оставляем экран висеть на "Слушаю тебя…" навсегда.
+    setTimeout(() => {
+      if (wasStoppedByUserRef.current) {
+        wasStoppedByUserRef.current = false;
+        commitTranscript();
+      }
+    }, 1500);
   };
 
   const submit = async () => {

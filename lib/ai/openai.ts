@@ -2,7 +2,13 @@
 // весь класс на семестр много раз. В отличие от бесплатного NIM: принимает
 // несколько фото в ОДНОМ запросе и гарантирует валидный JSON через response_format,
 // поэтому не нужен ни двухфазный OCR-обход, ни ретраи на случай сломанного JSON.
-import { buildExplainSystemPrompt, buildExplainFromTextPrompt, VERIFY_SYSTEM_PROMPT, buildVerifyUserPrompt } from "@/lib/prompts";
+import {
+  buildExplainSystemPrompt,
+  buildExplainFromTextPrompt,
+  VERIFY_SYSTEM_PROMPT,
+  buildVerifyUserPrompt,
+  buildAskSystemPrompt,
+} from "@/lib/prompts";
 import { ProviderError, type ExplainResult, type VerifyResult } from "./types";
 
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -80,6 +86,40 @@ export async function verifyRetell(keyPoints: string[], transcript: string): Pro
     [
       { role: "system", content: VERIFY_SYSTEM_PROMPT },
       { role: "user", content: buildVerifyUserPrompt(keyPoints, transcript) },
+    ],
+    apiKey,
+  );
+}
+
+async function chatCompletionText(messages: unknown, apiKey: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: MODEL, messages, temperature: 0.4, max_tokens: 400 }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new ProviderError("openai", `HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    const content: string | undefined = data?.choices?.[0]?.message?.content;
+    if (!content) throw new ProviderError("openai", "Пустой ответ модели");
+    return content.trim();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function askQuestion(explanationText: string, question: string): Promise<string> {
+  const apiKey = requireApiKey();
+  return chatCompletionText(
+    [
+      { role: "system", content: buildAskSystemPrompt(explanationText) },
+      { role: "user", content: question },
     ],
     apiKey,
   );

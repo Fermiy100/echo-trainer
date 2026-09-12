@@ -3,8 +3,9 @@
 import { useState } from "react";
 import styles from "./TermCard.module.css";
 
-export function TermCard({ term, definition }: { term: string; definition: string }) {
+export function TermCard({ term, definition, example }: { term: string; definition: string; example?: string }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const backLabel = example ? `${definition} Например: ${example}` : definition;
 
   return (
     <button
@@ -12,7 +13,7 @@ export function TermCard({ term, definition }: { term: string; definition: strin
       className={styles.card}
       onClick={() => setIsFlipped((v) => !v)}
       aria-pressed={isFlipped}
-      aria-label={isFlipped ? `${term}: ${definition}. Нажми, чтобы скрыть` : `${term}. Нажми, чтобы увидеть определение`}
+      aria-label={isFlipped ? `${term}: ${backLabel}. Нажми, чтобы скрыть` : `${term}. Нажми, чтобы увидеть определение`}
     >
       <div className={styles.inner} data-flipped={isFlipped}>
         <div className={styles.face}>
@@ -21,6 +22,7 @@ export function TermCard({ term, definition }: { term: string; definition: strin
         </div>
         <div className={styles.faceBack}>
           <span className={styles.definition}>{definition}</span>
+          {example && <span className={styles.example}>Например: {example}</span>}
         </div>
       </div>
     </button>

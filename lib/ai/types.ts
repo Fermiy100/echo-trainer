@@ -4,12 +4,16 @@ export type ExplainResult = {
   // в честный фоллбэк, если оно true (см. lib/prompts.ts UNREADABLE_INSTRUCTION).
   unreadable?: boolean;
   subject: string | null;
-  simplifiedText: string;
+  // Массив коротких абзацев вместо одной сплошной строки — интерфейс выводит их
+  // с отступами между собой, читать заметно легче, чем стену текста.
+  explanationBlocks: string[];
   keyTerms: string[];
   // Карточки-флешкарты по каждому термину (термин на лицевой стороне, простое
   // определение на обратной) — см. components/ui/TermCard.tsx. Опционально —
   // модель не всегда добавляет это поле, код должен переживать его отсутствие.
-  termCards?: { term: string; definition: string }[];
+  // "example" — только если он реально проясняет термин (обычно математика),
+  // модель сама решает, добавлять ли его для конкретного термина.
+  termCards?: { term: string; definition: string; example?: string }[];
   keyPoints: string[];
   analogies: string[];
   // Заполняется только при нескольких фото: сколько страниц реально удалось

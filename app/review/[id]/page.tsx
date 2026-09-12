@@ -99,6 +99,15 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
             </List>
           </Card>
 
+          {paragraph.termCards && paragraph.termCards.length >= 2 && (
+            <Button
+              label="Закрепить в квизе →"
+              variant="primary"
+              width="100%"
+              onClick={() => router.push(`/quiz/${paragraph.id}`)}
+            />
+          )}
+
           <div className={styles.actions}>
             <Button
               label="Попробовать ещё раз"

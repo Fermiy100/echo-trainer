@@ -66,6 +66,12 @@
   line-height: 1.4286;
 }
 
+.example {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .inner {
     transition: none;

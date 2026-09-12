@@ -8,6 +8,7 @@ import {
   TRANSCRIBE_PAGE_PROMPT,
   VERIFY_SYSTEM_PROMPT,
   buildVerifyUserPrompt,
+  buildAskSystemPrompt,
 } from "@/lib/prompts";
 import { extractJson } from "./json";
 import { ProviderError, type ExplainResult, type VerifyResult } from "./types";
@@ -172,5 +173,18 @@ export async function verifyRetell(keyPoints: string[], transcript: string): Pro
       { role: "user", content: buildVerifyUserPrompt(keyPoints, transcript) },
     ],
     apiKey,
+  );
+}
+
+export async function askQuestion(explanationText: string, question: string): Promise<string> {
+  const apiKey = requireApiKey();
+  return chatCompletionWithRetry(
+    TEXT_MODEL,
+    [
+      { role: "system", content: buildAskSystemPrompt(explanationText) },
+      { role: "user", content: question },
+    ],
+    apiKey,
+    2,
   );
 }

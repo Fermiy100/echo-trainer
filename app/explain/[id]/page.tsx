@@ -5,6 +5,7 @@ import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
@@ -12,6 +13,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Banner } from "@astryxdesign/core/Banner";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { getRussianVoice } from "@/lib/tts";
@@ -44,17 +46,25 @@ function withHighlightedTerms(text: string, terms: string[]) {
   );
 }
 
+type QaEntry = { question: string; answer: string };
+
 export default function ExplainPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [paragraph, setParagraph] = useState<Paragraph>(() => getParagraph(id));
   const [analogyIndex, setAnalogyIndex] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
+  const [isAsking, setIsAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = readParagraph(id);
     if (stored) setParagraph(stored);
   }, [id]);
+
+  const fullText = paragraph.explanationBlocks.join(" ");
 
   const speak = async () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -63,7 +73,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
       setIsSpeaking(false);
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(paragraph.simplifiedText);
+    const utterance = new SpeechSynthesisUtterance(fullText);
     utterance.lang = "ru-RU";
     utterance.rate = 0.95;
     const voice = await getRussianVoice();
@@ -72,6 +82,29 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
     setIsSpeaking(true);
+  };
+
+  const askQuestion = async () => {
+    const q = question.trim();
+    if (!q) return;
+    setIsAsking(true);
+    setAskError(null);
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ explanationText: fullText, question: q }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setQaHistory((prev) => [...prev, { question: q, answer: data.answer }]);
+      setQuestion("");
+    } catch (err) {
+      console.error("explain: /api/ask недоступен", err);
+      setAskError("Не получилось ответить — попробуй ещё раз");
+    } finally {
+      setIsAsking(false);
+    }
   };
 
   return (
@@ -118,7 +151,14 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
           <VStack gap={3}>
             <Heading level={1}>Вот что здесь написано</Heading>
             <Card padding={5}>
-              <Text type="large">{withHighlightedTerms(paragraph.simplifiedText, paragraph.keyTerms)}</Text>
+              <VStack gap={4}>
+                {paragraph.explanationBlocks.map((block, i) => (
+                  <HStack key={i} gap={2} vAlign="start">
+                    <Icon icon="info" size="sm" color="secondary" />
+                    <Text type="large">{withHighlightedTerms(block, paragraph.keyTerms)}</Text>
+                  </HStack>
+                ))}
+              </VStack>
             </Card>
             <Button
               label={isSpeaking ? "Остановить" : "Прочитать вслух"}
@@ -136,7 +176,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               </Text>
               <div className={styles.termGrid}>
                 {paragraph.termCards.map((card) => (
-                  <TermCard key={card.term} term={card.term} definition={card.definition} />
+                  <TermCard key={card.term} term={card.term} definition={card.definition} example={card.example} />
                 ))}
               </div>
             </VStack>
@@ -154,6 +194,46 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
                 />
               </VStack>
             </Card>
+          </VStack>
+
+          <VStack gap={3}>
+            <Heading level={2}>Есть вопрос?</Heading>
+            <Text type="supporting" color="secondary">
+              Спроси что угодно про этот параграф — объясним ещё раз по-другому
+            </Text>
+            {qaHistory.length > 0 && (
+              <VStack gap={3}>
+                {qaHistory.map((qa, i) => (
+                  <Card key={i} padding={4} elevation="low">
+                    <VStack gap={2}>
+                      <Text type="body" weight="bold">
+                        {qa.question}
+                      </Text>
+                      <Text type="body" color="secondary">
+                        {qa.answer}
+                      </Text>
+                    </VStack>
+                  </Card>
+                ))}
+              </VStack>
+            )}
+            {askError && <Banner status="error" title="Не получилось" description={askError} />}
+            <HStack gap={2}>
+              <div className={styles.askInput}>
+                <TextInput
+                  label="Вопрос"
+                  isLabelHidden
+                  value={question}
+                  onChange={setQuestion}
+                  placeholder="Например: а зачем это вообще нужно?"
+                  isDisabled={isAsking}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") askQuestion();
+                  }}
+                />
+              </div>
+              <Button label="Спросить" variant="primary" isLoading={isAsking} onClick={askQuestion} />
+            </HStack>
           </VStack>
 
           <Button

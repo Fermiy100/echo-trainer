@@ -1,0 +1,99 @@
+.page {
+  min-height: 100dvh;
+  background: var(--color-background-body);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3, 12px);
+  padding: var(--spacing-3, 12px) var(--spacing-4, 16px);
+}
+
+.backLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.progressTrack {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-full, 999px);
+  transition: width 300ms var(--ease-standard, ease);
+}
+
+.option {
+  width: 100%;
+  padding: var(--spacing-4, 16px);
+  border-radius: var(--radius-container);
+  border: 2px solid var(--color-border);
+  background: var(--color-background-surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 150ms var(--ease-standard, ease),
+    border-color 150ms,
+    background-color 150ms;
+}
+
+.option:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.option:disabled {
+  cursor: default;
+}
+
+.option[data-state="correct"] {
+  border-color: var(--color-success, #0d8626);
+  background: var(--color-success-muted, #0b991f33);
+  animation: pop 300ms var(--ease-standard, ease);
+}
+
+.option[data-state="incorrect"] {
+  border-color: var(--color-error, #e3193b);
+  background: var(--color-error-muted, #e3193b33);
+  animation: shake 300ms var(--ease-standard, ease);
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option[data-state="correct"],
+  .option[data-state="incorrect"] {
+    animation: none;
+  }
+}

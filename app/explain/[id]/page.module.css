@@ -38,3 +38,7 @@
     grid-template-columns: 1fr;
   }
 }
+
+.askInput {
+  flex: 1;
+}
