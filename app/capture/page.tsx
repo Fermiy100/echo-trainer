@@ -4,16 +4,27 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 import { Center } from "@astryxdesign/core/Center";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Icon } from "@astryxdesign/core/Icon";
-import { MOCK_PARAGRAPH } from "@/lib/mock-data";
+import { Banner } from "@astryxdesign/core/Banner";
 import { storeParagraph } from "@/lib/paragraph-store";
 import { getInterest } from "@/lib/profile";
 import styles from "./page.module.css";
+
+const MAX_PHOTOS = 5;
+
+function PlusIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -27,38 +38,42 @@ function readAsDataUrl(file: File): Promise<string> {
 export default function CapturePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // разрешает выбрать тот же файл повторно
     if (!file) return;
-    setDataUrl(await readAsDataUrl(file));
+    const dataUrl = await readAsDataUrl(file);
+    setError(null);
+    setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, dataUrl]));
   };
 
-  const retake = () => {
-    setDataUrl(null);
-    if (inputRef.current) inputRef.current.value = "";
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   const confirm = async () => {
-    if (!dataUrl) return;
+    if (photos.length === 0) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       const res = await fetch("/api/explain", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl: dataUrl, interest: getInterest() }),
+        body: JSON.stringify({ imageDataUrls: photos, interest: getInterest() }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
+      if (!res.ok) throw new Error(result?.error || `HTTP ${res.status}`);
       storeParagraph(result.id, result);
       router.push(`/explain/${result.id}`);
     } catch (err) {
-      // Сеть/сервер недоступны — честный офлайн-пример вместо тупика на экране
-      console.error("capture: /api/explain недоступен, использую офлайн-пример", err);
-      storeParagraph(MOCK_PARAGRAPH.id, MOCK_PARAGRAPH);
-      router.push(`/explain/${MOCK_PARAGRAPH.id}`);
+      // Честно показываем, что не получилось, вместо того чтобы подсунуть
+      // случайный пример под видом разбора реального фото ученика.
+      console.error("capture: /api/explain недоступен", err);
+      setError("Не получилось прочитать фото — переснимай при хорошем освещении, без бликов, или попробуй ещё раз");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +100,7 @@ export default function CapturePage() {
         className={styles.hiddenInput}
       />
 
-      {!dataUrl && (
+      {photos.length === 0 && (
         <Center axis="both" minHeight="70dvh">
           <VStack gap={5} hAlign="center" padding={5}>
             <div className={styles.frame}>
@@ -96,7 +111,8 @@ export default function CapturePage() {
                 Наведи камеру на страницу
               </Heading>
               <Text type="body" color="secondary" justify="center">
-                Постарайся уместить весь параграф в кадр, без бликов
+                Постарайся уместить весь параграф в кадр, без бликов. Не поместился в один
+                кадр — сфотографируй по частям, можно до {MAX_PHOTOS} фото.
               </Text>
             </VStack>
             <VStack gap={2} hAlign="center">
@@ -116,21 +132,52 @@ export default function CapturePage() {
         </Center>
       )}
 
-      {dataUrl && (
+      {photos.length > 0 && (
         <VStack gap={5} padding={5}>
-          <div className={styles.previewFrame}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={dataUrl} alt="Превью страницы" className={styles.previewImage} />
+          <div className={styles.thumbGrid}>
+            {photos.map((photo, i) => (
+              <div key={i} className={styles.thumb}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo} alt={`Страница ${i + 1}`} className={styles.thumbImage} />
+                <button
+                  type="button"
+                  className={styles.thumbRemove}
+                  aria-label={`Убрать фото ${i + 1}`}
+                  onClick={() => removePhoto(i)}
+                  disabled={isSubmitting}
+                >
+                  <Icon icon="close" size="sm" />
+                </button>
+              </div>
+            ))}
+            {photos.length < MAX_PHOTOS && (
+              <button
+                type="button"
+                className={styles.thumbAdd}
+                onClick={() => inputRef.current?.click()}
+                disabled={isSubmitting}
+              >
+                <Icon icon={PlusIcon} color="secondary" />
+                <Text type="supporting" color="secondary">
+                  Добавить
+                </Text>
+              </button>
+            )}
           </div>
+
+          {error && <Banner status="error" title="Не получилось" description={error} />}
+
           <VStack gap={2}>
             <Button
-              label={isSubmitting ? "Читаю параграф…" : "Всё верно"}
+              label={isSubmitting ? "Читаю параграф…" : photos.length > 1 ? `Всё верно (${photos.length} фото)` : "Всё верно"}
               variant="primary"
               width="100%"
               isLoading={isSubmitting}
               onClick={confirm}
             />
-            <Button label="Переснять" variant="ghost" width="100%" isDisabled={isSubmitting} onClick={retake} />
+            {!isSubmitting && (
+              <Button label="Переснять всё" variant="ghost" width="100%" onClick={() => setPhotos([])} />
+            )}
           </VStack>
         </VStack>
       )}

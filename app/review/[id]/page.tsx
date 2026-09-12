@@ -10,28 +10,30 @@ import { Button } from "@astryxdesign/core/Button";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Card } from "@astryxdesign/core/Card";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Banner } from "@astryxdesign/core/Banner";
 import { UnderstandingRing } from "@/components/ui/UnderstandingRing";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
-import { readReview } from "@/lib/review-store";
+import { readReview, type StoredReview } from "@/lib/review-store";
 import styles from "./page.module.css";
 
-// Демо-фоллбэк: если /api/verify недоступен или экран открыт напрямую
-// (например /demo), показываем правдоподобный пример вместо пустого экрана.
-const DEMO_COVERED_INDICES = [0, 1, 3];
+// Демо-фоллбэк: если экран открыт напрямую (например /demo) без реальной
+// проверки — показываем правдоподобный пример вместо пустого экрана.
+const DEMO_REVIEW: StoredReview = { coveredIndices: [0, 1, 3], source: undefined };
 
 export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [paragraph, setParagraph] = useState<Paragraph>(() => getParagraph(id));
-  const [coveredIndices, setCoveredIndices] = useState<number[]>(DEMO_COVERED_INDICES);
+  const [review, setReview] = useState<StoredReview>(DEMO_REVIEW);
+  const coveredIndices = review.coveredIndices;
 
   useEffect(() => {
     const storedParagraph = readParagraph(id);
     if (storedParagraph) setParagraph(storedParagraph);
 
     const storedReview = readReview(id);
-    if (storedReview) setCoveredIndices(storedReview);
+    if (storedReview) setReview(storedReview);
   }, [id]);
 
   const covered = coveredIndices.length;
@@ -60,6 +62,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     <div className={styles.page}>
       <div className={styles.shell}>
         <VStack gap={6} padding={5} hAlign="center">
+          {review.source === "heuristic" && (
+            <Banner
+              status="info"
+              title="Проверено упрощённым способом"
+              description="Нейросеть сейчас недоступна, поэтому пересказ сверили по совпадению ключевых слов, а не по смыслу — результат может быть менее точным, чем обычно."
+            />
+          )}
           <Center>
             <UnderstandingRing covered={covered} total={total} />
           </Center>

@@ -10,6 +10,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Banner } from "@astryxdesign/core/Banner";
+import { TextArea } from "@astryxdesign/core/TextArea";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { storeReview } from "@/lib/review-store";
@@ -25,25 +27,29 @@ function formatTime(totalSeconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// Web Speech API — бесплатная расшифровка прямо в браузере (см. 02-ARCHITECTURE.md).
-// Поддержана не везде (в основном Chrome/Edge) — там, где её нет, запись всё равно
-// работает как таймер + waveform, просто transcript останется пустым и проверка
-// на бэкенде честно уйдёт в антислоп-фоллбэк вместо падения.
+// Web Speech API — бесплатная расшифровка прямо в браузере. Поддержана не везде
+// (например, отсутствует в Safari на iOS) — там, где её нет, ученик печатает
+// пересказ вручную вместо того, чтобы молча ничего не записывать.
 function getSpeechRecognition(): { new (): SpeechRecognition } | null {
   if (typeof window === "undefined") return null;
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 }
 
+type Phase = "idle" | "recording" | "reviewing" | "submitting";
+
 export default function RetellPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [paragraph, setParagraph] = useState<Paragraph>(() => getParagraph(id));
-  const [isRecording, setIsRecording] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [liveText, setLiveText] = useState("");
+  const [finalText, setFinalText] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const transcriptRef = useRef("");
+  const speechSupported = useRef(getSpeechRecognition() !== null).current;
 
   useEffect(() => {
     const stored = readParagraph(id);
@@ -51,7 +57,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   }, [id]);
 
   useEffect(() => {
-    if (isRecording) {
+    if (phase === "recording") {
       intervalRef.current = setInterval(() => {
         setElapsed((s) => {
           if (s + 1 >= RECOMMENDED_LIMIT_SECONDS) {
@@ -66,71 +72,102 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording]);
-
-  const hasRecording = !isRecording && elapsed > 0;
+  }, [phase]);
 
   const startRecording = () => {
     transcriptRef.current = "";
+    setLiveText("");
     setElapsed(0);
+    setErrorMessage(null);
     const Recognition = getSpeechRecognition();
-    if (Recognition) {
+    if (!Recognition) {
+      // Защитный случай: сюда не должны попадать, обе кнопки, вызывающие
+      // startRecording, скрыты когда !speechSupported — но на всякий случай
+      // не показываем "Слушаю тебя…" без единого шанса что-то записать.
+      setErrorMessage("Голосовой ввод не поддержан — впиши пересказ текстом");
+      return;
+    }
+    try {
       const recognition = new Recognition();
       recognition.lang = "ru-RU";
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalText = "";
+        let finalChunk = "";
+        let interimChunk = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          const text = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalChunk += text;
+          else interimChunk += text;
         }
-        if (finalText) transcriptRef.current += ` ${finalText}`;
+        if (finalChunk) transcriptRef.current += ` ${finalChunk}`;
+        // Показываем и уже распознанное, и то, что распознаётся прямо сейчас —
+        // так ученик сразу видит, слушает его приложение или нет.
+        setLiveText(`${transcriptRef.current} ${interimChunk}`.trim());
       };
-      recognition.onerror = (e: Event) => console.error("retell: SpeechRecognition ошибка", e);
+      recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+        console.error("retell: SpeechRecognition ошибка", e.error);
+        // "no-speech" — просто тишина между фразами, не повод останавливать запись.
+        // Всё остальное (нет доступа к микрофону, распознавание не поддержано в
+        // рантайме и т.д.) — честно останавливаем, а не оставляем "Слушаю тебя…"
+        // висеть без единого шанса что-то записать.
+        if (e.error === "no-speech") return;
+        recognitionRef.current = null;
+        setErrorMessage(
+          e.error === "not-allowed" || e.error === "service-not-allowed"
+            ? "Нет доступа к микрофону — разреши его в браузере или впиши пересказ текстом"
+            : "Распознавание речи не сработало — впиши пересказ текстом",
+        );
+        setFinalText(transcriptRef.current.trim());
+        setPhase("reviewing");
+      };
       recognition.start();
       recognitionRef.current = recognition;
+    } catch (err) {
+      console.error("retell: не удалось запустить распознавание", err);
+      setErrorMessage("Не удалось включить микрофон — впиши пересказ текстом");
+      setPhase("reviewing");
+      return;
     }
-    setIsRecording(true);
+    setPhase("recording");
   };
 
   const stopRecording = () => {
     recognitionRef.current?.stop();
     recognitionRef.current = null;
-    setIsRecording(false);
-  };
-
-  const toggleRecording = () => {
-    if (hasRecording) {
-      startRecording();
-    } else if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    setFinalText(transcriptRef.current.trim());
+    setPhase("reviewing");
   };
 
   const submit = async () => {
-    setIsSubmitting(true);
+    const transcript = finalText.trim();
+    if (!transcript) {
+      setErrorMessage("Пересказ пустой — впиши хотя бы пару предложений, что запомнил");
+      return;
+    }
+    setPhase("submitting");
+    setErrorMessage(null);
     try {
       const res = await fetch("/api/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           keyPoints: paragraph.keyPoints,
-          transcript: transcriptRef.current.trim(),
+          transcript,
           subject: paragraph.subject,
           studentId: getStudentId(),
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { coveredIndices } = await res.json();
-      storeReview(paragraph.id, coveredIndices);
-    } catch (err) {
-      // Проверка недоступна — на /review сработает встроенный демо-фоллбэк,
-      // экран всё равно не остаётся пустым.
-      console.error("retell: /api/verify недоступен", err);
-    } finally {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      storeReview(paragraph.id, data.coveredIndices, data.source);
       router.push(`/review/${paragraph.id}`);
+    } catch (err) {
+      // Честно показываем ошибку прямо здесь и даём попробовать снова — вместо
+      // того чтобы молча уйти на /review с придуманным результатом.
+      console.error("retell: /api/verify недоступен", err);
+      setErrorMessage("Не получилось проверить пересказ — проверь интернет и попробуй ещё раз");
+      setPhase("reviewing");
     }
   };
 
@@ -146,51 +183,128 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
         <div className={styles.headerSpacer} />
       </div>
 
-      <Center axis="both" minHeight="75dvh">
-        <VStack gap={6} hAlign="center" padding={5}>
-          <VStack gap={1} hAlign="center">
-            <Heading level={1} justify="center">
-              {hasRecording ? "Запись готова" : isRecording ? "Слушаю тебя…" : "Готов пересказать?"}
-            </Heading>
-            <Text type="body" color="secondary" justify="center">
-              {hasRecording
-                ? "Можешь переслушать себя мысленно и отправить на проверку"
-                : "Расскажи, что запомнил, своими словами — 60–90 секунд достаточно"}
-            </Text>
+      {!speechSupported && phase === "idle" && (
+        <VStack padding={5}>
+          <Banner
+            status="info"
+            title="Голосовой ввод не поддержан в этом браузере"
+            description="Это нормально для некоторых мобильных браузеров (например, Safari на iPhone) — впиши пересказ текстом, проверка сработает точно так же."
+          />
+        </VStack>
+      )}
+
+      {phase === "idle" && !speechSupported && (
+        <VStack gap={4} padding={5}>
+          <TextArea
+            label="Твой пересказ"
+            value={finalText}
+            onChange={setFinalText}
+            placeholder="Расскажи своими словами, что запомнил из параграфа…"
+            rows={6}
+          />
+          <Button label="Готово →" variant="primary" width="100%" onClick={() => setPhase("reviewing")} />
+        </VStack>
+      )}
+
+      {phase === "idle" && speechSupported && (
+        <Center axis="both" minHeight="70dvh">
+          <VStack gap={6} hAlign="center" padding={5}>
+            <VStack gap={1} hAlign="center">
+              <Heading level={1} justify="center">
+                Готов пересказать?
+              </Heading>
+              <Text type="body" color="secondary" justify="center">
+                Расскажи, что запомнил, своими словами — 60–90 секунд достаточно
+              </Text>
+            </VStack>
+            <div className={styles.recordButtonWrap}>
+              <IconButton
+                label="Начать запись"
+                icon={<Icon icon="microphone" size="lg" />}
+                variant="primary"
+                elevation="high"
+                size="lg"
+                onClick={startRecording}
+              />
+            </div>
           </VStack>
+        </Center>
+      )}
 
-          <div className={styles.waveform} data-active={isRecording}>
-            {Array.from({ length: BAR_COUNT }).map((_, i) => (
-              <span key={i} className={styles.bar} style={{ animationDelay: `${i * 70}ms` }} />
-            ))}
-          </div>
+      {phase === "recording" && (
+        <Center axis="both" minHeight="70dvh">
+          <VStack gap={5} hAlign="center" padding={5}>
+            <Heading level={1} justify="center">
+              Слушаю тебя…
+            </Heading>
 
-          <Text type="display-2" hasTabularNumbers color={isRecording ? "accent" : "secondary"}>
-            {formatTime(elapsed)}
-          </Text>
+            <div className={styles.waveform} data-active="true">
+              {Array.from({ length: BAR_COUNT }).map((_, i) => (
+                <span key={i} className={styles.bar} style={{ animationDelay: `${i * 70}ms` }} />
+              ))}
+            </div>
 
-          <div className={styles.recordButtonWrap}>
+            <Text type="display-2" hasTabularNumbers color="accent">
+              {formatTime(elapsed)}
+            </Text>
+
+            {/* Живая расшифровка — видно прямо сейчас, что распознаёт приложение,
+                а не только после отправки на проверку. */}
+            <div className={styles.liveTranscript}>
+              <Text type="body" color={liveText ? "primary" : "secondary"} justify="center">
+                {liveText || "Говори — здесь появится то, что услышит приложение…"}
+              </Text>
+            </div>
+
             <IconButton
-              label={isRecording ? "Остановить запись" : hasRecording ? "Записать заново" : "Начать запись"}
-              icon={<Icon icon={isRecording ? "stop" : "microphone"} size="lg" />}
+              label="Остановить запись"
+              icon={<Icon icon="stop" size="lg" />}
               variant="primary"
               elevation="high"
               size="lg"
-              onClick={toggleRecording}
+              onClick={stopRecording}
             />
-          </div>
+          </VStack>
+        </Center>
+      )}
 
-          {hasRecording && (
+      {(phase === "reviewing" || phase === "submitting") && (
+        <VStack gap={4} padding={5}>
+          <Heading level={1}>Проверь, что расслышали</Heading>
+          <Text type="supporting" color="secondary">
+            Можешь поправить текст, если приложение что-то не расслышало — проверяться будет
+            именно то, что здесь написано
+          </Text>
+          <TextArea
+            label="Твой пересказ"
+            isLabelHidden
+            value={finalText}
+            onChange={setFinalText}
+            placeholder="Расскажи своими словами, что запомнил из параграфа…"
+            rows={6}
+            isDisabled={phase === "submitting"}
+          />
+          {errorMessage && <Banner status="error" title="Не получилось" description={errorMessage} />}
+          <VStack gap={2}>
             <Button
-              label={isSubmitting ? "Проверяю…" : "Готово →"}
+              label={phase === "submitting" ? "Проверяю…" : "Отправить на проверку →"}
               variant="primary"
-              width="240px"
-              isLoading={isSubmitting}
+              width="100%"
+              isLoading={phase === "submitting"}
               onClick={submit}
             />
-          )}
+            {speechSupported && (
+              <Button
+                label="Записать заново"
+                variant="ghost"
+                width="100%"
+                isDisabled={phase === "submitting"}
+                onClick={startRecording}
+              />
+            )}
+          </VStack>
         </VStack>
-      </Center>
+      )}
     </div>
   );
 }

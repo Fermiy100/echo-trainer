@@ -5,20 +5,25 @@ function key(id: string) {
   return `echo:review:${id}`;
 }
 
-export function storeReview(id: string, coveredIndices: number[]) {
+export type StoredReview = {
+  coveredIndices: number[];
+  source?: "nim" | "deepseek" | "heuristic";
+};
+
+export function storeReview(id: string, coveredIndices: number[], source?: StoredReview["source"]) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(key(id), JSON.stringify(coveredIndices));
+    sessionStorage.setItem(key(id), JSON.stringify({ coveredIndices, source }));
   } catch (err) {
     console.error("review-store: не удалось сохранить", err);
   }
 }
 
-export function readReview(id: string): number[] | null {
+export function readReview(id: string): StoredReview | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(key(id));
-    return raw ? (JSON.parse(raw) as number[]) : null;
+    return raw ? (JSON.parse(raw) as StoredReview) : null;
   } catch (err) {
     console.error("review-store: не удалось прочитать", err);
     return null;

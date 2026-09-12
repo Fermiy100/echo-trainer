@@ -34,7 +34,9 @@ async function chatCompletion(model: string, messages: unknown, apiKey: string) 
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 1024 }),
+      // Низкая температура — модель не всегда соблюдает "строго JSON" при 0.4,
+      // особенно на длинных параграфах; 0.15 заметно надёжнее для структурированного вывода.
+      body: JSON.stringify({ model, messages, temperature: 0.15, max_tokens: 1400 }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -49,28 +51,49 @@ async function chatCompletion(model: string, messages: unknown, apiKey: string) 
   }
 }
 
-export async function explainFromImage(imageDataUrl: string, interest?: string | null): Promise<ExplainResult> {
+// Модель не всегда возвращает валидный JSON с первой попытки (иногда добавляет
+// пояснение вокруг или обрывает форматирование) — это подтверждено повторными
+// тестами на одном и том же фото: часть попыток проходит, часть — нет. Раньше
+// одна неудача парсинга сразу уводила в офлайн-пример; теперь пробуем ещё раз,
+// прежде чем сдаться — это решает подавляющее большинство случаев.
+async function chatCompletionAsJson<T>(model: string, messages: unknown, apiKey: string, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const content = await chatCompletion(model, messages, apiKey);
+      return extractJson<T>(content);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+export async function explainFromImage(imageDataUrls: string[], interest?: string | null): Promise<ExplainResult> {
   const apiKey = requireApiKey();
-  const content = await chatCompletion(
+  const label =
+    imageDataUrls.length > 1
+      ? `Вот ${imageDataUrls.length} фото одного параграфа учебника (по порядку):`
+      : "Вот фото страницы учебника:";
+  return chatCompletionAsJson<ExplainResult>(
     VISION_MODEL,
     [
       { role: "system", content: buildExplainSystemPrompt(interest) },
       {
         role: "user",
         content: [
-          { type: "text", text: "Вот фото страницы учебника:" },
-          { type: "image_url", image_url: { url: imageDataUrl } },
+          { type: "text", text: label },
+          ...imageDataUrls.map((url) => ({ type: "image_url", image_url: { url } })),
         ],
       },
     ],
     apiKey,
   );
-  return extractJson<ExplainResult>(content);
 }
 
 export async function verifyRetell(keyPoints: string[], transcript: string): Promise<VerifyResult> {
   const apiKey = requireApiKey();
-  const content = await chatCompletion(
+  return chatCompletionAsJson<VerifyResult>(
     TEXT_MODEL,
     [
       { role: "system", content: VERIFY_SYSTEM_PROMPT },
@@ -78,5 +101,4 @@ export async function verifyRetell(keyPoints: string[], transcript: string): Pro
     ],
     apiKey,
   );
-  return extractJson<VerifyResult>(content);
 }

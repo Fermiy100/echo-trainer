@@ -11,6 +11,9 @@ export type Paragraph = {
   keyTerms: string[];
   keyPoints: string[];
   analogies: string[];
+  // "offline-example" — честная метка: ИИ не смог прочитать фото ученика, и это
+  // запасной пример, а не разбор его реального параграфа (см. explain/[id]/page.tsx).
+  source?: "nim" | "offline-example";
 };
 
 export const MOCK_PARAGRAPH: Paragraph = {

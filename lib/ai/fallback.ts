@@ -9,9 +9,9 @@ import type { ExplainResult, VerifyResult } from "./types";
 export type ExplainOutcome = ExplainResult & { source: "nim" | "offline-example" };
 export type VerifyOutcome = VerifyResult & { source: "nim" | "deepseek" | "heuristic" };
 
-export async function getExplanation(imageDataUrl: string, interest?: string | null): Promise<ExplainOutcome> {
+export async function getExplanation(imageDataUrls: string[], interest?: string | null): Promise<ExplainOutcome> {
   try {
-    const result = await nim.explainFromImage(imageDataUrl, interest);
+    const result = await nim.explainFromImage(imageDataUrls, interest);
     return { ...result, source: "nim" };
   } catch (err) {
     console.error("explain: NIM недоступен, отдаю офлайн-пример", err);

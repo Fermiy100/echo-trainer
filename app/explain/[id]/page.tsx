@@ -11,8 +11,10 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Banner } from "@astryxdesign/core/Banner";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
+import { getRussianVoice } from "@/lib/tts";
 import styles from "./page.module.css";
 
 function escapeRegExp(value: string) {
@@ -53,7 +55,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
     if (stored) setParagraph(stored);
   }, [id]);
 
-  const speak = () => {
+  const speak = async () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (isSpeaking) {
       window.speechSynthesis.cancel();
@@ -62,6 +64,9 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
     }
     const utterance = new SpeechSynthesisUtterance(paragraph.simplifiedText);
     utterance.lang = "ru-RU";
+    utterance.rate = 0.95;
+    const voice = await getRussianVoice();
+    if (voice) utterance.voice = voice;
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
@@ -82,6 +87,18 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
 
       <div className={styles.shell}>
         <VStack gap={6} padding={5}>
+          {paragraph.source === "offline-example" && (
+            <Banner
+              status="warning"
+              title="Не получилось прочитать твоё фото"
+              description="Показываем пример вместо разбора — это не твой параграф. Переснимай при хорошем освещении, без бликов, и попробуй ещё раз."
+              endContent={
+                <Link href="/capture">
+                  <Button label="Переснять" variant="secondary" size="sm" />
+                </Link>
+              }
+            />
+          )}
           <VStack gap={3}>
             <Heading level={1}>Вот что здесь написано</Heading>
             <Card padding={5}>
