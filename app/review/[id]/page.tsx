@@ -100,6 +100,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
             </List>
           </Card>
 
+          {/* Иерархия кнопок намеренно строгая: ровно одна главная (primary) —
+              самое полезное следующее действие. Остальные — secondary (с
+              видимой рамкой, но не яркие) или ghost (просто текст, для самого
+              редкого и необязательного действия). Раньше здесь было две
+              одинаково яркие "primary"-кнопки на одном экране, из-за чего было
+              непонятно, какая из них главная. */}
           {missedIndices.length > 0 ? (
             <Button
               label={`Пересказать пропущенное (${missedIndices.length}) →`}
@@ -118,21 +124,21 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
           {paragraph.termCards && paragraph.termCards.length >= 2 && (
             <Button
-              label="Закрепить в квизе →"
+              label="Закрепить в квизе"
               variant="secondary"
               width="100%"
               onClick={() => router.push(`/quiz/${paragraph.id}`)}
             />
           )}
 
-          <div className={styles.actions}>
-            <Button
-              label="Пересказать весь параграф заново"
-              variant="ghost"
-              onClick={() => router.push(`/retell/${paragraph.id}`)}
-            />
-            <Button label="Дальше" variant="primary" onClick={() => router.push("/")} />
-          </div>
+          <Button label="Готово, на главную" variant="secondary" width="100%" onClick={() => router.push("/")} />
+
+          <Button
+            label="Пересказать весь параграф заново"
+            variant="ghost"
+            width="100%"
+            onClick={() => router.push(`/retell/${paragraph.id}`)}
+          />
         </VStack>
       </div>
     </div>

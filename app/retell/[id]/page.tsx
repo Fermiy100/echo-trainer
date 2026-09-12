@@ -4,7 +4,6 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
-import { Center } from "@astryxdesign/core/Center";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
@@ -363,40 +362,50 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {phase === "recording" && (
-        <Center axis="both" minHeight="70dvh">
-          <VStack gap={5} hAlign="center" padding={5}>
-            <Heading level={1} justify="center">
-              {mode === "battle" ? "Отвечаешь у доски…" : "Слушаю тебя…"}
-            </Heading>
+        <VStack gap={5} hAlign="center" padding={5}>
+          <Heading level={1} justify="center">
+            {mode === "battle" ? "Отвечаешь у доски…" : "Слушаю тебя…"}
+          </Heading>
 
-            <div className={styles.waveform} data-active="true">
-              {Array.from({ length: BAR_COUNT }).map((_, i) => (
-                <span key={i} className={styles.bar} style={{ animationDelay: `${i * 70}ms` }} />
-              ))}
-            </div>
+          <div className={styles.waveform} data-active="true">
+            {Array.from({ length: BAR_COUNT }).map((_, i) => (
+              <span key={i} className={styles.bar} style={{ animationDelay: `${i * 70}ms` }} />
+            ))}
+          </div>
 
-            <Text type="display-2" hasTabularNumbers color="accent">
-              {formatTime(elapsed)}
+          <Text type="display-2" hasTabularNumbers color="accent">
+            {formatTime(elapsed)}
+          </Text>
+
+          {/* Живая расшифровка — видно прямо сейчас, что распознаёт приложение,
+              а не только после отправки на проверку. */}
+          <div className={styles.liveTranscript}>
+            <Text type="body" color={liveText ? "primary" : "secondary"} justify="center">
+              {liveText || "Говори — здесь появится то, что услышит приложение…"}
             </Text>
+          </div>
 
-            {/* Живая расшифровка — видно прямо сейчас, что распознаёт приложение,
-                а не только после отправки на проверку. */}
-            <div className={styles.liveTranscript}>
-              <Text type="body" color={liveText ? "primary" : "secondary"} justify="center">
-                {liveText || "Говори — здесь появится то, что услышит приложение…"}
-              </Text>
-            </div>
+          {/* Раньше подсказки показывались только на экране "Готов пересказать?"
+              и пропадали, как только начиналась запись — то есть именно тогда,
+              когда они нужнее всего. Теперь они остаются на экране и во время
+              самой записи (кроме боевого режима, где их нет намеренно). */}
+          {mode !== "battle" && hintPoints.length > 0 && (
+            <VStack gap={2} width="100%">
+              {hintPoints.map((point, i) => (
+                <HintChip key={i} text={point} peekable={mode === "recall"} />
+              ))}
+            </VStack>
+          )}
 
-            <IconButton
-              label="Остановить запись"
-              icon={<Icon icon="stop" size="lg" />}
-              variant="primary"
-              elevation="high"
-              size="lg"
-              onClick={stopRecording}
-            />
-          </VStack>
-        </Center>
+          <IconButton
+            label="Остановить запись"
+            icon={<Icon icon="stop" size="lg" />}
+            variant="primary"
+            elevation="high"
+            size="lg"
+            onClick={stopRecording}
+          />
+        </VStack>
       )}
 
       {(phase === "reviewing" || phase === "submitting") && (
