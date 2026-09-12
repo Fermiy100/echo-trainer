@@ -200,8 +200,7 @@ export default function CapturePage() {
           {error && <Banner status="error" title="Не получилось" description={error} />}
           {isSubmitting && photos.length > 1 && (
             <Text type="supporting" color="secondary" justify="center">
-              Несколько фото читаются по очереди — на бесплатном тарифе это может занять
-              несколько минут, не закрывай экран
+              Несколько фото могут читаться дольше одного — не закрывай экран
             </Text>
           )}
 

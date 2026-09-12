@@ -7,7 +7,7 @@ function key(id: string) {
 
 export type StoredReview = {
   coveredIndices: number[];
-  source?: "nim" | "deepseek" | "heuristic";
+  source?: "openai" | "nim" | "deepseek" | "heuristic";
 };
 
 export function storeReview(id: string, coveredIndices: number[], source?: StoredReview["source"]) {
