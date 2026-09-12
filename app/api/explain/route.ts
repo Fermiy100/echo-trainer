@@ -3,10 +3,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { getExplanation } from "@/lib/ai/fallback";
 import { getCached, setCached, checkRateLimit } from "@/lib/cache";
 
-// ~10MB в base64 на фото — с запасом покрывает фото с телефона, но не пускает
-// произвольно огромные пейлоады тратить бесплатный лимит NIM.
+// ~10MB в base64 на фото — с запасом покрывает даже несжатое фото с телефона.
 const MAX_IMAGE_DATA_URL_LENGTH = 14_000_000;
 const MAX_IMAGES = 5;
+// NVIDIA NIM жёстко отклоняет запрос больше 26 214 400 байт целиком (проверено
+// напрямую: 5 полноразмерных фото с айфона = HTTP 400 "payload above ... bytes").
+// Клиент сжимает фото перед отправкой, но это серверная страховка на случай,
+// если сжатие не сработало или кто-то бьёт в API напрямую, а не через /capture.
+const MAX_TOTAL_DATA_URL_LENGTH = 20_000_000;
 
 function isValidImage(value: unknown): value is string {
   return typeof value === "string" && value.startsWith("data:image/") && value.length <= MAX_IMAGE_DATA_URL_LENGTH;
@@ -31,6 +35,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: `Ожидается от 1 до ${MAX_IMAGES} фото (data:image/...)` },
       { status: 400 },
+    );
+  }
+  const totalLength = (imageDataUrls as string[]).reduce((sum, url) => sum + url.length, 0);
+  if (totalLength > MAX_TOTAL_DATA_URL_LENGTH) {
+    return NextResponse.json(
+      { error: "Все фото вместе слишком большие — убери одно или переснимай при меньшем разрешении" },
+      { status: 413 },
     );
   }
   if (interest !== undefined && interest !== null && typeof interest !== "string") {

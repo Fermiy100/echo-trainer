@@ -4,6 +4,10 @@ export type ExplainResult = {
   keyTerms: string[];
   keyPoints: string[];
   analogies: string[];
+  // Заполняется только при нескольких фото: сколько страниц реально удалось
+  // прочитать — если меньше pagesTotal, объяснение построено не по всем фото.
+  pagesRead?: number;
+  pagesTotal?: number;
 };
 
 export type VerifyResult = {

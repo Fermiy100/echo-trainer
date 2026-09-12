@@ -99,6 +99,21 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               }
             />
           )}
+          {paragraph.source === "nim" &&
+            paragraph.pagesTotal !== undefined &&
+            paragraph.pagesRead !== undefined &&
+            paragraph.pagesRead < paragraph.pagesTotal && (
+              <Banner
+                status="info"
+                title={`Прочитано ${paragraph.pagesRead} из ${paragraph.pagesTotal} фото`}
+                description="Часть страниц не удалось разобрать (сеть или качество снимка) — разбор ниже может охватывать не весь материал. Можешь переснять недостающие страницы отдельно."
+                endContent={
+                  <Link href="/capture">
+                    <Button label="Досъёмка" variant="secondary" size="sm" />
+                  </Link>
+                }
+              />
+            )}
           <VStack gap={3}>
             <Heading level={1}>Вот что здесь написано</Heading>
             <Card padding={5}>

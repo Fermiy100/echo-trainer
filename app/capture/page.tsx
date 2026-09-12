@@ -35,6 +35,38 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+// Реальное фото с телефона — это 3-6МБ в base64 на снимок; 5 таких фото разом
+// превышают жёсткий лимит NVIDIA NIM в 25МБ на запрос (проверено напрямую: с
+// оригиналами модель отвечает HTTP 400 "payload above 26214400 bytes"). Такое
+// разрешение и не нужно, чтобы прочитать текст страницы — уменьшаем перед
+// отправкой: 1600px по длинной стороне превращает ~4МБ фото в ~300-400КБ.
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.82;
+
+async function resizeToDataUrl(file: File): Promise<string> {
+  try {
+    // {imageOrientation: "from-image"} учитывает EXIF-поворот с телефона —
+    // без этого фото, снятое вертикально, могло бы лечь на canvas боком.
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D недоступен");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+  } catch (err) {
+    // На случай браузера без поддержки createImageBitmap — лучше отправить
+    // фото как есть, чем не отправить вообще (сервер всё равно проверит размер).
+    console.error("capture: не удалось сжать фото, отправляю оригинал", err);
+    return readAsDataUrl(file);
+  }
+}
+
 export default function CapturePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,7 +78,7 @@ export default function CapturePage() {
     const file = e.target.files?.[0];
     e.target.value = ""; // разрешает выбрать тот же файл повторно
     if (!file) return;
-    const dataUrl = await readAsDataUrl(file);
+    const dataUrl = await resizeToDataUrl(file);
     setError(null);
     setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, dataUrl]));
   };
@@ -166,6 +198,12 @@ export default function CapturePage() {
           </div>
 
           {error && <Banner status="error" title="Не получилось" description={error} />}
+          {isSubmitting && photos.length > 1 && (
+            <Text type="supporting" color="secondary" justify="center">
+              Несколько фото читаются по очереди — на бесплатном тарифе это может занять
+              несколько минут, не закрывай экран
+            </Text>
+          )}
 
           <VStack gap={2}>
             <Button

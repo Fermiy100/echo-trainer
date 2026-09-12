@@ -14,6 +14,9 @@ export type Paragraph = {
   // "offline-example" — честная метка: ИИ не смог прочитать фото ученика, и это
   // запасной пример, а не разбор его реального параграфа (см. explain/[id]/page.tsx).
   source?: "nim" | "offline-example";
+  // Заполняется только при нескольких фото — сколько страниц реально прочитались.
+  pagesRead?: number;
+  pagesTotal?: number;
 };
 
 export const MOCK_PARAGRAPH: Paragraph = {

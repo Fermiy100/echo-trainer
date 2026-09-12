@@ -4,3 +4,8 @@ node_modules
 .DS_Store
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Тестовые фото учебника (личные материалы, не часть кода проекта)
+IMG_*.JPG
+IMG_*.jpg
+IMG_*.HEIC
