@@ -9,3 +9,5 @@ tsconfig.tsbuildinfo
 IMG_*.JPG
 IMG_*.jpg
 IMG_*.HEIC
+.vercel
+.env*

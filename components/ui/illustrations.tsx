@@ -190,6 +190,34 @@ export function PagesStack({ className }: { className?: string }) {
   );
 }
 
+// Фирменный знак "Эхо" — три расходящихся кольца звука от точки. Один и тот
+// же рисунок стоит в шапке (здесь, через CSS-токены темы), в фавиконе
+// (app/icon.tsx) и в PWA-иконке (app/api/icon/route.tsx) — там координаты и
+// цвета захардкожены как есть, потому что ImageResponse рендерится вне
+// дерева темы и не видит CSS-переменные.
+export function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="30" cy="70" r="6" fill="var(--color-accent)" />
+      <path d="M 30 52 A 18 18 0 0 1 48 70" stroke="var(--color-accent)" strokeWidth="8" strokeLinecap="round" />
+      <path
+        d="M 30 34 A 36 36 0 0 1 66 70"
+        stroke="var(--color-accent)"
+        strokeWidth="8"
+        strokeLinecap="round"
+        opacity="0.72"
+      />
+      <path
+        d="M 30 16 A 54 54 0 0 1 84 70"
+        stroke="var(--color-accent)"
+        strokeWidth="8"
+        strokeLinecap="round"
+        opacity="0.42"
+      />
+    </svg>
+  );
+}
+
 export function HomeMark({ className, active }: { className?: string; active?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">

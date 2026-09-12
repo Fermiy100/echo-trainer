@@ -14,25 +14,28 @@ export async function GET(req: NextRequest) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#FF6B4A",
+          background: "#FFF9F5",
         }}
       >
-        <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 38 38" fill="none">
-          <path d="M8 30 C8 20 8 12 18 8" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" fill="none" />
+        {/* То же "эхо"-кольцо, что и в app/icon.tsx (фавикон) и LogoMark
+            (шапка сайта) — единая иконка везде, см. чат про выбор дизайна. */}
+        <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 100 100" fill="none">
+          <circle cx="30" cy="70" r="6" fill="#FF6B4A" />
+          <path d="M 30 52 A 18 18 0 0 1 48 70" stroke="#FF6B4A" strokeWidth="8" strokeLinecap="round" fill="none" />
           <path
-            d="M16 30 C16 23 17 18 24 15"
-            stroke="#FFFFFF"
-            strokeWidth="4"
+            d="M 30 34 A 36 36 0 0 1 66 70"
+            stroke="#FF6B4A"
+            strokeWidth="8"
             strokeLinecap="round"
-            opacity="0.7"
+            opacity="0.72"
             fill="none"
           />
           <path
-            d="M24 30 C24 26 25 23 30 21"
-            stroke="#FFFFFF"
-            strokeWidth="4"
+            d="M 30 16 A 54 54 0 0 1 84 70"
+            stroke="#FF6B4A"
+            strokeWidth="8"
             strokeLinecap="round"
-            opacity="0.45"
+            opacity="0.42"
             fill="none"
           />
         </svg>

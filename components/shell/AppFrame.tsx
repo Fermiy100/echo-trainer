@@ -4,7 +4,7 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { StackItem } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TopNav, TopNavHeading, TopNavItem } from "@astryxdesign/core/TopNav";
-import { HomeMark, HistoryMark, AboutMark } from "@/components/ui/illustrations";
+import { HomeMark, HistoryMark, AboutMark, LogoMark } from "@/components/ui/illustrations";
 import styles from "./AppFrame.module.css";
 
 type NavKey = "home" | "history" | "about";
@@ -26,7 +26,13 @@ export function AppFrame({
     <VStack as="main" gap={0} minHeight="100dvh">
       <div className={styles.desktopNav}>
         <TopNav
-          heading={<TopNavHeading heading="Эхо" headingHref="/" />}
+          heading={
+            <TopNavHeading
+              heading="Эхо"
+              headingHref="/"
+              logo={<LogoMark className={styles.logoMark} />}
+            />
+          }
           startContent={
             <>
               {NAV_ITEMS.map((item) => (
