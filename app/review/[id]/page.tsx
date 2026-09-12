@@ -38,7 +38,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   const covered = coveredIndices.length;
   const total = paragraph.keyPoints.length;
-  const missed = paragraph.keyPoints.filter((_, i) => !coveredIndices.includes(i));
+  const missedIndices = paragraph.keyPoints.map((_, i) => i).filter((i) => !coveredIndices.includes(i));
+  const missed = missedIndices.map((i) => paragraph.keyPoints[i]);
   const ratio = total > 0 ? covered / total : 0;
 
   // Честная обратная связь — это весь смысл приложения, поэтому заголовок
@@ -99,10 +100,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
             </List>
           </Card>
 
+          {missedIndices.length > 0 ? (
+            <Button
+              label={`Пересказать пропущенное (${missedIndices.length}) →`}
+              variant="primary"
+              width="100%"
+              onClick={() => router.push(`/retell/${paragraph.id}?mode=recall&focus=${missedIndices.join(",")}`)}
+            />
+          ) : (
+            <Button
+              label="Тренировка у доски →"
+              variant="primary"
+              width="100%"
+              onClick={() => router.push(`/retell/${paragraph.id}?mode=battle`)}
+            />
+          )}
+
           {paragraph.termCards && paragraph.termCards.length >= 2 && (
             <Button
               label="Закрепить в квизе →"
-              variant="primary"
+              variant="secondary"
               width="100%"
               onClick={() => router.push(`/quiz/${paragraph.id}`)}
             />
@@ -110,7 +127,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
           <div className={styles.actions}>
             <Button
-              label="Попробовать ещё раз"
+              label="Пересказать весь параграф заново"
               variant="ghost"
               onClick={() => router.push(`/retell/${paragraph.id}`)}
             />

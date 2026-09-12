@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Center } from "@astryxdesign/core/Center";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -17,10 +17,32 @@ import { readParagraph } from "@/lib/paragraph-store";
 import { storeReview } from "@/lib/review-store";
 import { getStudentId } from "@/lib/client-id";
 import { recordLocalAttempt } from "@/lib/local-history";
+import { HintChip } from "@/components/ui/HintChip";
 import styles from "./page.module.css";
 
 const RECOMMENDED_LIMIT_SECONDS = 90;
 const BAR_COUNT = 10;
+
+// Три режима пересказа — одна и та же механика записи, разный уровень подсказки:
+// - guided (по умолчанию, первая попытка со страницы объяснения) — все опорные
+//   тезисы видны целиком.
+// - recall (после неудачного пересказа, только пропущенные пункты) — подсказки
+//   скрыты, можно приоткрывать по одному слову за тап ("угасающая" подсказка).
+// - battle ("Тренировка у доски") — подсказок нет вообще, явно отдельный режим.
+type RetellMode = "guided" | "recall" | "battle";
+
+function parseMode(value: string | null): RetellMode {
+  return value === "recall" || value === "battle" ? value : "guided";
+}
+
+function parseFocusIndices(value: string | null, total: number): number[] {
+  if (!value) return Array.from({ length: total }, (_, i) => i);
+  const parsed = value
+    .split(",")
+    .map((v) => Number.parseInt(v, 10))
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < total);
+  return parsed.length > 0 ? parsed : Array.from({ length: total }, (_, i) => i);
+}
 
 function formatTime(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
@@ -41,6 +63,8 @@ type Phase = "idle" | "recording" | "reviewing" | "submitting";
 export default function RetellPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = parseMode(searchParams.get("mode"));
   const [paragraph, setParagraph] = useState<Paragraph>(() => getParagraph(id));
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -55,7 +79,33 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   // и она просто пропадает, если не подстраховаться этим буфером.
   const interimRef = useRef("");
   const wasStoppedByUserRef = useRef(false);
-  const speechSupported = useRef(getSpeechRecognition() !== null).current;
+  // На сервере window нет — SSR всегда рендерит false. Если вычислить реальное
+  // значение сразу на клиенте, оно может отличаться от того, что уже отрисовал
+  // сервер (Chrome/Edge поддерживают, Safari — нет), и React бросает ошибку
+  // гидратации. Поэтому сначала везде false, а настоящее значение — уже после
+  // маунта, когда сервер ни при чём.
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  const focusIndices = parseFocusIndices(searchParams.get("focus"), paragraph.keyPoints.length);
+  const hintPoints = focusIndices.map((i) => paragraph.keyPoints[i]).filter(Boolean);
+  const modeCopy: { heading: string; subtitle: string } = {
+    guided: {
+      heading: "Готов пересказать?",
+      subtitle: "Расскажи, что запомнил, своими словами — можешь опираться на подсказки ниже",
+    },
+    recall: {
+      heading: "Закрой пробелы",
+      subtitle: "В прошлый раз это осталось за кадром — вспомни, подглядывая по словечку, если совсем забыл",
+    },
+    battle: {
+      heading: "Отвечаешь у доски",
+      subtitle: "Без подсказок — как по-настоящему",
+    },
+  }[mode];
+
+  useEffect(() => {
+    setSpeechSupported(getSpeechRecognition() !== null);
+  }, []);
 
   useEffect(() => {
     const stored = readParagraph(id);
@@ -241,7 +291,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
           <IconButton label="Назад" icon={<Icon icon="chevronLeft" />} variant="ghost" />
         </Link>
         <Text type="body" weight="bold">
-          Перескажи своими словами
+          {mode === "battle" ? "Тренировка у доски" : mode === "recall" ? "Закрой пробелы" : "Перескажи своими словами"}
         </Text>
         <div className={styles.headerSpacer} />
       </div>
@@ -258,6 +308,19 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
 
       {phase === "idle" && !speechSupported && (
         <VStack gap={4} padding={5}>
+          <VStack gap={1}>
+            <Heading level={1}>{modeCopy.heading}</Heading>
+            <Text type="body" color="secondary">
+              {modeCopy.subtitle}
+            </Text>
+          </VStack>
+          {mode !== "battle" && hintPoints.length > 0 && (
+            <VStack gap={2}>
+              {hintPoints.map((point, i) => (
+                <HintChip key={i} text={point} peekable={mode === "recall"} />
+              ))}
+            </VStack>
+          )}
           <TextArea
             label="Твой пересказ"
             value={finalText}
@@ -270,35 +333,40 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {phase === "idle" && speechSupported && (
-        <Center axis="both" minHeight="70dvh">
-          <VStack gap={6} hAlign="center" padding={5}>
-            <VStack gap={1} hAlign="center">
-              <Heading level={1} justify="center">
-                Готов пересказать?
-              </Heading>
-              <Text type="body" color="secondary" justify="center">
-                Расскажи, что запомнил, своими словами — 60–90 секунд достаточно
-              </Text>
-            </VStack>
-            <div className={styles.recordButtonWrap}>
-              <IconButton
-                label="Начать запись"
-                icon={<Icon icon="microphone" size="lg" />}
-                variant="primary"
-                elevation="high"
-                size="lg"
-                onClick={startRecording}
-              />
-            </div>
+        <VStack gap={6} padding={5} hAlign="center">
+          <VStack gap={1} hAlign="center">
+            <Heading level={1} justify="center">
+              {modeCopy.heading}
+            </Heading>
+            <Text type="body" color="secondary" justify="center">
+              {modeCopy.subtitle}
+            </Text>
           </VStack>
-        </Center>
+          {mode !== "battle" && hintPoints.length > 0 && (
+            <VStack gap={2} width="100%">
+              {hintPoints.map((point, i) => (
+                <HintChip key={i} text={point} peekable={mode === "recall"} />
+              ))}
+            </VStack>
+          )}
+          <div className={styles.recordButtonWrap}>
+            <IconButton
+              label="Начать запись"
+              icon={<Icon icon="microphone" size="lg" />}
+              variant="primary"
+              elevation="high"
+              size="lg"
+              onClick={startRecording}
+            />
+          </div>
+        </VStack>
       )}
 
       {phase === "recording" && (
         <Center axis="both" minHeight="70dvh">
           <VStack gap={5} hAlign="center" padding={5}>
             <Heading level={1} justify="center">
-              Слушаю тебя…
+              {mode === "battle" ? "Отвечаешь у доски…" : "Слушаю тебя…"}
             </Heading>
 
             <div className={styles.waveform} data-active="true">
