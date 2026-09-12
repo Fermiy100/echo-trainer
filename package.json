@@ -1,0 +1,33 @@
+{
+  "name": "echo-trainer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.6.0",
+    "@astryxdesign/theme-neutral": "^0.6.0",
+    "@neondatabase/serverless": "^1.1.0",
+    "@stylexjs/stylex": "^0.19.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
+    "next": "16.3.4",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@astryxdesign/cli": "^0.6.0",
+    "@types/node": "22.10.7",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "typescript": "5.7.3"
+  },
+  "allowScripts": {
+    "@astryxdesign/core@0.6.0": true,
+    "@astryxdesign/cli@0.6.0": true
+  }
+}

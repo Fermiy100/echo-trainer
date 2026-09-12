@@ -1,0 +1,18 @@
+.page {
+  min-height: 100dvh;
+  background: var(--color-background-body);
+  padding-top: var(--spacing-6, 32px);
+}
+
+.shell {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 8px);
+  width: 100%;
+}

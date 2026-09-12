@@ -1,0 +1,74 @@
+.captureLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-container);
+}
+
+.captureLink > * {
+  transition:
+    transform 200ms var(--ease-standard, cubic-bezier(0.2, 0.8, 0.2, 1)),
+    box-shadow 200ms var(--ease-standard, ease);
+}
+
+.captureLink:hover > * {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-med, 0 12px 24px rgba(42, 33, 26, 0.1));
+}
+
+.captureLink:active > * {
+  transform: translateY(0);
+}
+
+.captureIllustration {
+  height: 132px;
+  width: 168px;
+}
+
+.statusLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 150ms var(--ease-standard, ease);
+}
+
+.statusLink:hover {
+  background: var(--color-background-body);
+}
+
+.statusLinkFirst:hover {
+  border-radius: var(--radius-container) 0 0 var(--radius-container);
+}
+
+.statusLinkLast:hover {
+  border-radius: 0 var(--radius-container) var(--radius-container) 0;
+}
+
+.statusIcon {
+  height: 32px;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .captureGrid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    grid-template-areas: "text illustration";
+    align-items: center;
+    gap: var(--spacing-10, 48px);
+  }
+
+  .captureText {
+    grid-area: text;
+  }
+
+  .captureIllustrationArea {
+    grid-area: illustration;
+  }
+
+  .captureIllustration {
+    height: 220px;
+    width: 280px;
+  }
+}

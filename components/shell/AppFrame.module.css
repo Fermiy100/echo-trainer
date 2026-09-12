@@ -1,0 +1,41 @@
+.shell {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+}
+
+.bottomNav {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+  padding-bottom: var(--spacing-2, 8px);
+}
+
+.navItem {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.navIcon {
+  height: 24px;
+  width: 24px;
+}
+
+.desktopNav {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .shell {
+    max-width: 1040px;
+    padding: 0 var(--spacing-6, 32px);
+  }
+
+  .desktopNav {
+    display: flex;
+  }
+
+  .bottomNav {
+    display: none;
+  }
+}

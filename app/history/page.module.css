@@ -1,0 +1,16 @@
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-3, 12px);
+}
+
+.statIcon {
+  height: 32px;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.emptyIllustration {
+  height: 110px;
+  width: 140px;
+}
