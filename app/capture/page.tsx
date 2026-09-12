@@ -70,6 +70,11 @@ async function resizeToDataUrl(file: File): Promise<string> {
 export default function CapturePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Отдельный input без capture — с ним у телефона нет причин решать за
+  // пользователя и сразу открывать камеру: "capture" на любом accept="image/*"
+  // указывает браузеру, что нужен именно съёмка, а не выбор существующего
+  // файла, поэтому один общий input не мог открыть галерею.
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +136,13 @@ export default function CapturePage() {
         onChange={onFile}
         className={styles.hiddenInput}
       />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={onFile}
+        className={styles.hiddenInput}
+      />
 
       {photos.length === 0 && (
         <Center axis="both" minHeight="70dvh">
@@ -157,7 +169,7 @@ export default function CapturePage() {
               <Button
                 label="Выбрать из галереи"
                 variant="ghost"
-                onClick={() => inputRef.current?.click()}
+                onClick={() => galleryInputRef.current?.click()}
               />
             </VStack>
           </VStack>
