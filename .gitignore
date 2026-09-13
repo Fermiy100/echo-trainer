@@ -11,3 +11,8 @@ IMG_*.jpg
 IMG_*.HEIC
 .vercel
 .env*
+
+# Локальные шпаргалки для AI-агентов, поставленные интеграцией Neon — не часть приложения
+.agents/
+.claude/skills/
+skills-lock.json

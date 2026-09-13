@@ -57,7 +57,21 @@ function getSpeechRecognition(): { new (): SpeechRecognition } | null {
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 }
 
-type Phase = "idle" | "recording" | "reviewing" | "submitting";
+// Groq Whisper — бесплатный резервный сервис расшифровки (см. app/api/transcribe).
+// Единственный путь на Safari/iOS, где нет Web Speech API вообще, и запасной
+// вариант там, где он есть, но распознал плохо.
+async function transcribeWithGroq(blob: Blob): Promise<string> {
+  const form = new FormData();
+  form.append("audio", blob, "retell.webm");
+  const res = await fetch("/api/transcribe", { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok || typeof data?.text !== "string") {
+    throw new Error(data?.error || `HTTP ${res.status}`);
+  }
+  return data.text as string;
+}
+
+type Phase = "idle" | "recording" | "transcribing" | "reviewing" | "submitting";
 
 export default function RetellPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -84,6 +98,13 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   // гидратации. Поэтому сначала везде false, а настоящее значение — уже после
   // маунта, когда сервер ни при чём.
   const [speechSupported, setSpeechSupported] = useState(false);
+  // Резервная запись звука (для Groq Whisper) — идёт параллельно с Web Speech,
+  // где он есть, и заменяет его целиком там, где его нет (Safari/iOS).
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
 
   const focusIndices = parseFocusIndices(searchParams.get("focus"), paragraph.keyPoints.length);
   const hintPoints = focusIndices.map((i) => paragraph.keyPoints[i]).filter(Boolean);
@@ -141,6 +162,69 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
     setPhase("reviewing");
   };
 
+  // Резервная запись звука для Groq — независимо от Web Speech API. Если
+  // микрофон недоступен по этой линии, просто нет резерва — не мешаем
+  // основному сценарию сообщением об ошибке.
+  const startAudioCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+    } catch (err) {
+      console.error("retell: резервная запись звука недоступна", err);
+      mediaRecorderRef.current = null;
+    }
+  };
+
+  const stopAudioCapture = (): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        resolve(null);
+        return;
+      }
+      recorder.onstop = () => {
+        const blob =
+          audioChunksRef.current.length > 0
+            ? new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" })
+            : null;
+        mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        resolve(blob);
+      };
+      recorder.stop();
+    });
+  };
+
+  // Safari на iPhone и другие браузеры без Web Speech API идут этим путём
+  // целиком: расшифровка приходит из Groq уже после остановки записи, а не
+  // по ходу — здесь просто нечего показывать вживую.
+  const finishWithoutSpeechRecognition = async () => {
+    setPhase("transcribing");
+    const blob = await stopAudioCapture();
+    setAudioBlob(blob);
+    if (!blob) {
+      setErrorMessage("Не удалось записать звук — впиши пересказ текстом");
+      setPhase("reviewing");
+      return;
+    }
+    try {
+      const text = await transcribeWithGroq(blob);
+      setFinalText(text);
+    } catch (err) {
+      console.error("retell: резервная расшифровка недоступна", err);
+      setErrorMessage("Резервная расшифровка сейчас недоступна — впиши пересказ текстом");
+    }
+    setPhase("reviewing");
+  };
+
   const startRecording = () => {
     transcriptRef.current = "";
     interimRef.current = "";
@@ -148,12 +232,15 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
     setLiveText("");
     setElapsed(0);
     setErrorMessage(null);
+    setAudioBlob(null);
+    // Резерв стартует всегда, параллельно с Web Speech (если он есть) — не
+    // блокирует и не мешает основному сценарию, если недоступен.
+    startAudioCapture();
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      // Защитный случай: сюда не должны попадать, обе кнопки, вызывающие
-      // startRecording, скрыты когда !speechSupported — но на всякий случай
-      // не показываем "Слушаю тебя…" без единого шанса что-то записать.
-      setErrorMessage("Голосовой ввод не поддержан — впиши пересказ текстом");
+      // Нет Web Speech API вообще (Safari/iOS) — расшифруем целиком через
+      // резервную запись после остановки, см. finishWithoutSpeechRecognition.
+      setPhase("recording");
       return;
     }
     try {
@@ -224,13 +311,18 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
 
   const stopRecording = () => {
     if (!recognitionRef.current) {
-      // Уже остановлено (например, только что сработала ошибка) — ждать нечего.
-      commitTranscript();
+      // Либо Web Speech вообще не поддержан (см. startRecording), либо уже
+      // остановлено ошибкой ранее — либо расшифровываем резервную запись,
+      // либо ждать больше нечего.
+      finishWithoutSpeechRecognition();
       return;
     }
     wasStoppedByUserRef.current = true;
     recognitionRef.current.stop();
     recognitionRef.current = null;
+    // Резервная запись — на будущее (кнопка "расшифровать точнее" на экране
+    // проверки), не блокирует и не участвует в основном сценарии ниже.
+    stopAudioCapture().then(setAudioBlob);
     // Текст фиксируется в onend (см. выше), а не здесь — .stop() завершает
     // сессию асинхронно, и последний ещё не подтверждённый кусок речи мог
     // прийти уже ПОСЛЕ немедленного чтения transcriptRef в этом обработчике.
@@ -299,39 +391,13 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
         <VStack padding={5}>
           <Banner
             status="info"
-            title="Голосовой ввод не поддержан в этом браузере"
-            description="Это нормально для некоторых мобильных браузеров (например, Safari на iPhone) — впиши пересказ текстом, проверка сработает точно так же."
+            title="Мгновенная расшифровка не поддержана в этом браузере"
+            description="Это нормально для некоторых мобильных браузеров (например, Safari на iPhone) — запись всё равно работает, просто текст появится сразу после того, как остановишь её, через отдельный резервный сервис, а не по ходу."
           />
         </VStack>
       )}
 
-      {phase === "idle" && !speechSupported && (
-        <VStack gap={4} padding={5}>
-          <VStack gap={1}>
-            <Heading level={1}>{modeCopy.heading}</Heading>
-            <Text type="body" color="secondary">
-              {modeCopy.subtitle}
-            </Text>
-          </VStack>
-          {mode !== "battle" && hintPoints.length > 0 && (
-            <VStack gap={2}>
-              {hintPoints.map((point, i) => (
-                <HintChip key={i} text={point} peekable={mode === "recall"} />
-              ))}
-            </VStack>
-          )}
-          <TextArea
-            label="Твой пересказ"
-            value={finalText}
-            onChange={setFinalText}
-            placeholder="Расскажи своими словами, что запомнил из параграфа…"
-            rows={6}
-          />
-          <Button label="Готово →" variant="primary" width="100%" onClick={() => setPhase("reviewing")} />
-        </VStack>
-      )}
-
-      {phase === "idle" && speechSupported && (
+      {phase === "idle" && (
         <VStack gap={6} padding={5} hAlign="center">
           <VStack gap={1} hAlign="center">
             <Heading level={1} justify="center">
@@ -358,6 +424,13 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
               onClick={startRecording}
             />
           </div>
+          {!speechSupported && (
+            <Button
+              label="Напечатать текст самому"
+              variant="ghost"
+              onClick={() => setPhase("reviewing")}
+            />
+          )}
         </VStack>
       )}
 
@@ -378,10 +451,14 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
           </Text>
 
           {/* Живая расшифровка — видно прямо сейчас, что распознаёт приложение,
-              а не только после отправки на проверку. */}
+              а не только после отправки на проверку. Там, где Web Speech API
+              нет вообще (Safari/iOS), показывать нечего — текст появится
+              только после остановки, через резервный сервис. */}
           <div className={styles.liveTranscript}>
             <Text type="body" color={liveText ? "primary" : "secondary"} justify="center">
-              {liveText || "Говори — здесь появится то, что услышит приложение…"}
+              {speechSupported
+                ? liveText || "Говори — здесь появится то, что услышит приложение…"
+                : "Идёт запись — текст появится сразу после остановки"}
             </Text>
           </div>
 
@@ -405,6 +482,17 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
             size="lg"
             onClick={stopRecording}
           />
+        </VStack>
+      )}
+
+      {phase === "transcribing" && (
+        <VStack gap={5} hAlign="center" padding={5}>
+          <Heading level={1} justify="center">
+            Расшифровываю…
+          </Heading>
+          <Text type="body" color="secondary" justify="center">
+            Секунду — резервный сервис слушает запись
+          </Text>
         </VStack>
       )}
 
@@ -433,15 +521,38 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
               isLoading={phase === "submitting"}
               onClick={submit}
             />
-            {speechSupported && (
+            {/* Резервная расшифровка звука, которая уже записана в фоне —
+                полезна и когда Web Speech распознал плохо, и как ретрай, если
+                первая попытка (или сама Groq) не сработала. */}
+            {audioBlob && (
               <Button
-                label="Записать заново"
+                label={transcribing ? "Расшифровываю…" : "Расшифровать точнее (резерв)"}
                 variant="ghost"
                 width="100%"
-                isDisabled={phase === "submitting"}
-                onClick={startRecording}
+                isLoading={transcribing}
+                isDisabled={phase === "submitting" || transcribing}
+                onClick={async () => {
+                  setTranscribing(true);
+                  setErrorMessage(null);
+                  try {
+                    const text = await transcribeWithGroq(audioBlob);
+                    setFinalText(text);
+                  } catch (err) {
+                    console.error("retell: резервная расшифровка недоступна", err);
+                    setErrorMessage("Резервная расшифровка сейчас недоступна — попробуй позже");
+                  } finally {
+                    setTranscribing(false);
+                  }
+                }}
               />
             )}
+            <Button
+              label="Записать заново"
+              variant="ghost"
+              width="100%"
+              isDisabled={phase === "submitting"}
+              onClick={startRecording}
+            />
           </VStack>
         </VStack>
       )}
