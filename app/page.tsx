@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
@@ -9,20 +9,27 @@ import { StackItem } from "@astryxdesign/core/Stack";
 import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
+import { Icon } from "@astryxdesign/core/Icon";
 import { Center } from "@astryxdesign/core/Center";
 import { AppFrame } from "@/components/shell/AppFrame";
 import { CaptureIllustration, StreakFlame, PagesStack } from "@/components/ui/illustrations";
 import { useStudentSummary } from "@/lib/hooks/useStudentSummary";
 import { hasOnboarded } from "@/lib/onboarding-status";
+import { isPro } from "@/lib/pro";
 import styles from "./page.module.css";
 
 export default function HomePage() {
   const router = useRouter();
   const { isLoading, totalParagraphs, streakDays } = useStudentSummary();
+  const [proActive, setProActive] = useState(false);
 
   useEffect(() => {
     if (!hasOnboarded()) router.replace("/onboarding");
   }, [router]);
+
+  useEffect(() => {
+    setProActive(isPro());
+  }, []);
 
   return (
     <AppFrame active="home">
@@ -93,6 +100,27 @@ export default function HomePage() {
             </StackItem>
           </HStack>
         </Card>
+
+        {!proActive && (
+          <Link href="/pro" className={styles.proLink}>
+            <Card padding={4} elevation="low">
+              <HStack gap={3} vAlign="center">
+                <Icon icon="info" color="accent" />
+                <StackItem size="fill">
+                  <VStack gap={0}>
+                    <Text type="body" weight="bold">
+                      Эхо Про — репетитор, а не игра
+                    </Text>
+                    <Text type="supporting" size="xsm">
+                      Безлимитные вопросы, карта слабых мест — от 149 ₽/мес
+                    </Text>
+                  </VStack>
+                </StackItem>
+                <Icon icon="chevronRight" color="secondary" size="sm" />
+              </HStack>
+            </Card>
+          </Link>
+        )}
       </VStack>
     </AppFrame>
   );

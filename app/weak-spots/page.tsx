@@ -10,20 +10,27 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
-import { Button } from "@astryxdesign/core/Button";
 import { Banner } from "@astryxdesign/core/Banner";
 import { getStudentId } from "@/lib/client-id";
 import { isPro } from "@/lib/pro";
+import { ProPaywallDialog } from "@/components/ui/ProPaywallDialog";
+import { pluralizeRu } from "@/lib/pluralize";
 import type { WeakSpot } from "@/lib/db";
 import styles from "./page.module.css";
 
 type LoadState = "loading" | "empty" | "ready" | "error";
+
+// Сколько строк показываем честно, без блюра — ровно столько, чтобы было
+// видно, что список настоящий (свои же пропущенные идеи), а не абстрактная
+// обещалка. Дальше — под замком.
+const FREE_PREVIEW_COUNT = 1;
 
 export default function WeakSpotsPage() {
   const [proActive, setProActive] = useState(false);
   const [checkedPro, setCheckedPro] = useState(false);
   const [state, setState] = useState<LoadState>("loading");
   const [spots, setSpots] = useState<WeakSpot[]>([]);
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
   useEffect(() => {
     setProActive(isPro());
@@ -31,7 +38,6 @@ export default function WeakSpotsPage() {
   }, []);
 
   useEffect(() => {
-    if (!checkedPro || !proActive) return;
     fetch(`/api/weak-spots?studentId=${encodeURIComponent(getStudentId())}`)
       .then((res) => res.json())
       .then((data) => {
@@ -42,7 +48,10 @@ export default function WeakSpotsPage() {
         console.error("weak-spots: /api/weak-spots недоступен", err);
         setState("error");
       });
-  }, [checkedPro, proActive]);
+  }, []);
+
+  const visibleSpots = proActive ? spots : spots.slice(0, FREE_PREVIEW_COUNT);
+  const lockedCount = spots.length - visibleSpots.length;
 
   return (
     <div className={styles.page}>
@@ -66,20 +75,7 @@ export default function WeakSpotsPage() {
             </Text>
           </VStack>
 
-          {checkedPro && !proActive && (
-            <VStack gap={3}>
-              <Banner
-                status="info"
-                title="Это часть Эхо Про"
-                description="Карта слабых мест копится из всех твоих пересказов — открывается вместе с Про."
-              />
-              <Link href="/pro">
-                <Button label="Узнать про Эхо Про →" variant="primary" width="100%" />
-              </Link>
-            </VStack>
-          )}
-
-          {checkedPro && proActive && state === "loading" && (
+          {state === "loading" && (
             <Center>
               <Text type="body" color="secondary">
                 Считаю…
@@ -87,7 +83,7 @@ export default function WeakSpotsPage() {
             </Center>
           )}
 
-          {checkedPro && proActive && state === "error" && (
+          {state === "error" && (
             <Banner
               status="error"
               title="Не получилось загрузить"
@@ -95,7 +91,7 @@ export default function WeakSpotsPage() {
             />
           )}
 
-          {checkedPro && proActive && state === "empty" && (
+          {state === "empty" && (
             <Card padding={6}>
               <Center>
                 <VStack gap={2} hAlign="center">
@@ -110,26 +106,55 @@ export default function WeakSpotsPage() {
             </Card>
           )}
 
-          {checkedPro && proActive && state === "ready" && (
-            <Card padding={0}>
-              <List>
-                {spots.map((spot) => (
-                  <ListItem
-                    key={`${spot.subject}:${spot.point}`}
-                    label={spot.point}
-                    description={spot.subject}
-                    endContent={
-                      <Text type="label" color="secondary" hasTabularNumbers>
-                        ×{spot.missedCount}
+          {state === "ready" && (
+            <VStack gap={3}>
+              <Card padding={0}>
+                <List>
+                  {visibleSpots.map((spot) => (
+                    <ListItem
+                      key={`${spot.subject}:${spot.point}`}
+                      label={spot.point}
+                      description={spot.subject}
+                      endContent={
+                        <Text type="label" color="secondary" hasTabularNumbers>
+                          ×{spot.missedCount}
+                        </Text>
+                      }
+                    />
+                  ))}
+                </List>
+              </Card>
+
+              {lockedCount > 0 && (
+                <button type="button" className={styles.lockedWrap} onClick={() => setPaywallOpen(true)}>
+                  <Card padding={0}>
+                    <div className={styles.blurredList}>
+                      <List>
+                        {spots.slice(visibleSpots.length, visibleSpots.length + 3).map((spot) => (
+                          <ListItem key={`${spot.subject}:${spot.point}`} label={spot.point} description={spot.subject} />
+                        ))}
+                      </List>
+                    </div>
+                    <div className={styles.lockOverlay}>
+                      <Icon icon="info" color="accent" />
+                      <Text type="body" weight="bold" color="accent">
+                        Ещё {lockedCount} {pluralizeRu(lockedCount, "место", "места", "мест")} — в Эхо Про
                       </Text>
-                    }
-                  />
-                ))}
-              </List>
-            </Card>
+                    </div>
+                  </Card>
+                </button>
+              )}
+            </VStack>
           )}
         </VStack>
       </div>
+
+      <ProPaywallDialog
+        isOpen={paywallOpen}
+        onOpenChange={setPaywallOpen}
+        reason="Вся карта слабых мест, а не только первая строка, — в Эхо Про."
+        onActivated={() => setProActive(true)}
+      />
     </div>
   );
 }

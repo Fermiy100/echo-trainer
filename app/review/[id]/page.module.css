@@ -9,3 +9,10 @@
   max-width: 480px;
   margin: 0 auto;
 }
+
+.plainLink {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+}

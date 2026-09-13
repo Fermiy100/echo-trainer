@@ -50,6 +50,12 @@
   flex-shrink: 0;
 }
 
+.proLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
 @media (min-width: 768px) {
   .captureGrid {
     display: grid;

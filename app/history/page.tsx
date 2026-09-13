@@ -17,6 +17,7 @@ import { StreakFlame, PagesStack, WelcomeIllustration } from "@/components/ui/il
 import { useStudentSummary } from "@/lib/hooks/useStudentSummary";
 import { getStudentId } from "@/lib/client-id";
 import { isPro } from "@/lib/pro";
+import { pluralizeRu } from "@/lib/pluralize";
 import styles from "./page.module.css";
 
 function formatDate(iso: string) {
@@ -26,11 +27,16 @@ function formatDate(iso: string) {
 export default function HistoryPage() {
   const { isLoading, entries, totalParagraphs, streakDays } = useStudentSummary();
   const [proActive, setProActive] = useState(false);
+  const [weakSpotCount, setWeakSpotCount] = useState<number | null>(null);
   const [parentCode, setParentCode] = useState<string | null>(null);
   const [parentCodeError, setParentCodeError] = useState(false);
 
   useEffect(() => {
     setProActive(isPro());
+    fetch(`/api/weak-spots?studentId=${encodeURIComponent(getStudentId())}`)
+      .then((res) => res.json())
+      .then((data) => setWeakSpotCount((data.spots ?? []).length))
+      .catch((err) => console.error("history: /api/weak-spots недоступен", err));
     fetch("/api/parent-code", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -83,24 +89,31 @@ export default function HistoryPage() {
           </Card>
         </div>
 
-        <Link href="/weak-spots" className={styles.plainLink}>
-          <Card padding={4} elevation="low">
-            <HStack gap={3} vAlign="center">
-              <Icon icon="warning" color={proActive ? "accent" : "secondary"} />
-              <StackItem size="fill">
-                <VStack gap={0}>
-                  <Text type="body" weight="bold">
-                    Карта слабых мест
-                  </Text>
-                  <Text type="supporting" size="xsm">
-                    {proActive ? "Что чаще всего не запоминается" : "Часть Эхо Про — посмотреть"}
-                  </Text>
-                </VStack>
-              </StackItem>
-              <Icon icon="chevronRight" color="secondary" size="sm" />
-            </HStack>
-          </Card>
-        </Link>
+        {weakSpotCount !== null && weakSpotCount > 0 && (
+          <Link href="/weak-spots" className={styles.plainLink}>
+            <Card padding={4} elevation="low">
+              <HStack gap={3} vAlign="center">
+                <Text type="display-2" color="accent" hasTabularNumbers>
+                  {weakSpotCount}
+                </Text>
+                <StackItem size="fill">
+                  <VStack gap={0}>
+                    <Text type="body" weight="bold">
+                      {pluralizeRu(weakSpotCount, "слабое место", "слабых места", "слабых мест")}{" "}
+                      {proActive ? "накопилось" : "ждут в Про"}
+                    </Text>
+                    <Text type="supporting" size="xsm">
+                      {proActive
+                        ? "Идеи, которые чаще всего пропускаешь — открыть карту"
+                        : "Идеи, которые ты пропускаешь снова и снова — посмотреть"}
+                    </Text>
+                  </VStack>
+                </StackItem>
+                <Icon icon="chevronRight" color="secondary" size="sm" />
+              </HStack>
+            </Card>
+          </Link>
+        )}
 
         {parentCode && !parentCodeError && (
           <Card padding={4} elevation="low">

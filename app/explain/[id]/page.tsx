@@ -19,6 +19,7 @@ import { readParagraph } from "@/lib/paragraph-store";
 import { getRussianVoice } from "@/lib/tts";
 import { TermCard } from "@/components/ui/TermCard";
 import { checkAskQuota, recordAsk, checkRewordQuota, recordReword, isPro, type QuotaCheck } from "@/lib/pro";
+import { ProPaywallDialog } from "@/components/ui/ProPaywallDialog";
 import styles from "./page.module.css";
 
 function escapeRegExp(value: string) {
@@ -70,6 +71,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
   const [proActive, setProActive] = useState(false);
   const [askQuota, setAskQuota] = useState<QuotaCheck>({ allowed: true, remaining: 3 });
   const [rewordQuota, setRewordQuota] = useState<QuotaCheck>({ allowed: true, remaining: 1 });
+  const [paywallReason, setPaywallReason] = useState<string | null>(null);
 
   const refreshQuotas = (paragraphId: string) => {
     setProActive(isPro());
@@ -93,7 +95,13 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
   const fullText = explanationBlocks.join(" ");
 
   const rewordExplanation = async () => {
-    if (!rewordQuota.allowed) return;
+    if (!rewordQuota.allowed) {
+      // Кнопка кликабельна нарочно — заблокированный disabled-элемент никто
+      // не замечает (см. чат: "даже не узнал про платную"). Клик на упоре в
+      // лимит и есть момент, чтобы показать, что именно скрыто за Про.
+      setPaywallReason("Один раз объяснить иначе — бесплатно. Дальше — только в Про.");
+      return;
+    }
     setIsRewording(true);
     setRewordError(null);
     try {
@@ -135,7 +143,11 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
 
   const askQuestion = async () => {
     const q = question.trim();
-    if (!q || !askQuota.allowed) return;
+    if (!q) return;
+    if (!askQuota.allowed) {
+      setPaywallReason("Бесплатные вопросы на сегодня закончились. Без дневного лимита — в Про.");
+      return;
+    }
     setIsAsking(true);
     setAskError(null);
     try {
@@ -211,7 +223,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
                 ))}
               </VStack>
             </Card>
-            <HStack gap={2}>
+            <HStack gap={2} vAlign="center">
               <Button
                 label={isSpeaking ? "Остановить" : "Прочитать вслух"}
                 variant="secondary"
@@ -220,31 +232,17 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               />
               <Button
                 label={isRewording ? "Объясняю иначе…" : "Объясни иначе"}
-                variant="ghost"
+                variant={rewordQuota.allowed ? "ghost" : "secondary"}
                 isLoading={isRewording}
-                isDisabled={!rewordQuota.allowed}
-                tooltip={
-                  rewordQuota.allowed
-                    ? undefined
-                    : proActive
-                      ? undefined
-                      : "Бесплатно — один раз на параграф. Без лимита — в Эхо Про"
-                }
+                icon={rewordQuota.allowed ? undefined : <Icon icon="info" size="sm" />}
                 onClick={rewordExplanation}
               />
+              {!proActive && (
+                <Text type="supporting" size="xsm" color={rewordQuota.allowed ? "secondary" : "accent"}>
+                  {rewordQuota.allowed ? "1 бесплатно" : "нужен Про"}
+                </Text>
+              )}
             </HStack>
-            {!rewordQuota.allowed && !proActive && (
-              <Banner
-                status="info"
-                title="Бесплатный лимит на этот параграф закончился"
-                description="Один раз объяснить иначе — бесплатно. Без ограничений — в Эхо Про."
-                endContent={
-                  <Link href="/pro">
-                    <Button label="Про" variant="secondary" size="sm" />
-                  </Link>
-                }
-              />
-            )}
             {rewordError && <Banner status="error" title="Не получилось" description={rewordError} />}
           </VStack>
 
@@ -277,11 +275,16 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
           </VStack>
 
           <VStack gap={3}>
-            <Heading level={2}>Есть вопрос?</Heading>
+            <HStack gap={2} vAlign="center">
+              <Heading level={2}>Есть вопрос?</Heading>
+              {!proActive && (
+                <Text type="label" color={askQuota.remaining === 0 ? "accent" : "secondary"} hasTabularNumbers>
+                  {askQuota.remaining}/3 бесплатно
+                </Text>
+              )}
+            </HStack>
             <Text type="supporting" color="secondary">
-              {proActive
-                ? "Спроси что угодно про этот параграф — объясним ещё раз по-другому"
-                : `Спроси что угодно про этот параграф — осталось ${askQuota.remaining} из 3 бесплатных вопросов сегодня`}
+              Спроси что угодно про этот параграф — объясним ещё раз по-другому
             </Text>
             {qaHistory.length > 0 && (
               <VStack gap={3}>
@@ -300,18 +303,6 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               </VStack>
             )}
             {askError && <Banner status="error" title="Не получилось" description={askError} />}
-            {!askQuota.allowed && (
-              <Banner
-                status="info"
-                title="Бесплатные вопросы на сегодня закончились"
-                description="В Эхо Про — без дневного лимита, спрашивай, пока реально не поймёшь."
-                endContent={
-                  <Link href="/pro">
-                    <Button label="Про" variant="secondary" size="sm" />
-                  </Link>
-                }
-              />
-            )}
             <HStack gap={2}>
               <div className={styles.askInput}>
                 <TextInput
@@ -320,21 +311,22 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
                   value={question}
                   onChange={setQuestion}
                   placeholder="Например: а зачем это вообще нужно?"
-                  isDisabled={isAsking || !askQuota.allowed}
+                  isDisabled={isAsking}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") askQuestion();
                   }}
                 />
               </div>
-              <Button
-                label="Спросить"
-                variant="primary"
-                isLoading={isAsking}
-                isDisabled={!askQuota.allowed}
-                onClick={askQuestion}
-              />
+              <Button label="Спросить" variant="primary" isLoading={isAsking} onClick={askQuestion} />
             </HStack>
           </VStack>
+
+          <ProPaywallDialog
+            isOpen={paywallReason !== null}
+            onOpenChange={(open) => !open && setPaywallReason(null)}
+            reason={paywallReason ?? ""}
+            onActivated={() => refreshQuotas(paragraph.id)}
+          />
 
           <Button
             label="Готов пересказать →"

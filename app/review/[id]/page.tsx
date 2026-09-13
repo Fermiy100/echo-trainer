@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
 import { Center } from "@astryxdesign/core/Center";
@@ -15,6 +16,9 @@ import { UnderstandingRing } from "@/components/ui/UnderstandingRing";
 import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { readReview, type StoredReview } from "@/lib/review-store";
+import { getStudentId } from "@/lib/client-id";
+import { isPro } from "@/lib/pro";
+import { pluralizeRu } from "@/lib/pluralize";
 import styles from "./page.module.css";
 
 // Демо-фоллбэк: если экран открыт напрямую (например /demo) без реальной
@@ -26,6 +30,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const [paragraph, setParagraph] = useState<Paragraph>(() => getParagraph(id));
   const [review, setReview] = useState<StoredReview>(DEMO_REVIEW);
+  const [proActive, setProActive] = useState(false);
+  const [weakSpotCount, setWeakSpotCount] = useState<number | null>(null);
   const coveredIndices = review.coveredIndices;
 
   useEffect(() => {
@@ -35,6 +41,14 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     const storedReview = readReview(id);
     if (storedReview) setReview(storedReview);
   }, [id]);
+
+  useEffect(() => {
+    setProActive(isPro());
+    fetch(`/api/weak-spots?studentId=${encodeURIComponent(getStudentId())}`)
+      .then((res) => res.json())
+      .then((data) => setWeakSpotCount((data.spots ?? []).length))
+      .catch((err) => console.error("review: /api/weak-spots недоступен", err));
+  }, []);
 
   const covered = coveredIndices.length;
   const total = paragraph.keyPoints.length;
@@ -99,6 +113,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
               })}
             </List>
           </Card>
+
+          {/* Ровно тот момент, когда напоминание о системной проблеме
+              убеждает сильнее всего: ученик только что своими глазами увидел,
+              что пропустил мысль — здесь же честно показываем, что это не
+              разовая случайность, а часть накопленной статистики. */}
+          {missedIndices.length > 0 && !proActive && weakSpotCount !== null && weakSpotCount > 0 && (
+            <Link href="/weak-spots" className={styles.plainLink}>
+              <Card padding={4} width="100%" elevation="low">
+                <VStack gap={1} hAlign="center">
+                  <Text type="body" weight="bold" justify="center">
+                    Это не в первый раз
+                  </Text>
+                  <Text type="supporting" justify="center">
+                    Уже {weakSpotCount} {pluralizeRu(weakSpotCount, "мысль", "мысли", "мыслей")} по разным
+                    параграфам ускользают вот так же — карта слабых мест в Эхо Про показывает их все сразу.
+                  </Text>
+                </VStack>
+              </Card>
+            </Link>
+          )}
 
           {/* Иерархия кнопок намеренно строгая: ровно одна главная (primary) —
               самое полезное следующее действие. Остальные — secondary (с
