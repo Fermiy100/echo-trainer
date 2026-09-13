@@ -9,6 +9,7 @@ import {
   VERIFY_SYSTEM_PROMPT,
   buildVerifyUserPrompt,
   buildAskSystemPrompt,
+  buildRewordSystemPrompt,
 } from "@/lib/prompts";
 import { extractJson } from "./json";
 import { ProviderError, type ExplainResult, type VerifyResult } from "./types";
@@ -187,4 +188,14 @@ export async function askQuestion(explanationText: string, question: string): Pr
     apiKey,
     2,
   );
+}
+
+export async function rewordExplanation(originalText: string): Promise<string[]> {
+  const apiKey = requireApiKey();
+  const result = await chatCompletionAsJson<{ explanationBlocks: string[] }>(
+    TEXT_MODEL,
+    [{ role: "system", content: buildRewordSystemPrompt(originalText) }],
+    apiKey,
+  );
+  return result.explanationBlocks;
 }

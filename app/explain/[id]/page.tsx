@@ -18,6 +18,7 @@ import { getParagraph, type Paragraph } from "@/lib/mock-data";
 import { readParagraph } from "@/lib/paragraph-store";
 import { getRussianVoice } from "@/lib/tts";
 import { TermCard } from "@/components/ui/TermCard";
+import { checkAskQuota, recordAsk, checkRewordQuota, recordReword, isPro, type QuotaCheck } from "@/lib/pro";
 import styles from "./page.module.css";
 
 function escapeRegExp(value: string) {
@@ -58,13 +59,61 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
   const [isAsking, setIsAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+  const [explanationBlocks, setExplanationBlocks] = useState(paragraph.explanationBlocks);
+  const [isRewording, setIsRewording] = useState(false);
+  const [rewordError, setRewordError] = useState<string | null>(null);
+  // Квоты и Про-статус читаются из localStorage — на сервере его нет, поэтому
+  // на сервере и при первом клиентском рендере всегда безопасное значение "по
+  // умолчанию" (как будто ничего ещё не потрачено), а настоящее — только после
+  // маунта. Иначе сервер и клиент могли бы отрисовать разные ветки и React
+  // бросил бы ошибку гидратации (та же история, что и с speechSupported).
+  const [proActive, setProActive] = useState(false);
+  const [askQuota, setAskQuota] = useState<QuotaCheck>({ allowed: true, remaining: 3 });
+  const [rewordQuota, setRewordQuota] = useState<QuotaCheck>({ allowed: true, remaining: 1 });
+
+  const refreshQuotas = (paragraphId: string) => {
+    setProActive(isPro());
+    setAskQuota(checkAskQuota(paragraphId));
+    setRewordQuota(checkRewordQuota(paragraphId));
+  };
+
+  useEffect(() => {
+    refreshQuotas(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   useEffect(() => {
     const stored = readParagraph(id);
-    if (stored) setParagraph(stored);
+    if (stored) {
+      setParagraph(stored);
+      setExplanationBlocks(stored.explanationBlocks);
+    }
   }, [id]);
 
-  const fullText = paragraph.explanationBlocks.join(" ");
+  const fullText = explanationBlocks.join(" ");
+
+  const rewordExplanation = async () => {
+    if (!rewordQuota.allowed) return;
+    setIsRewording(true);
+    setRewordError(null);
+    try {
+      const res = await fetch("/api/reword", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ explanationText: fullText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setExplanationBlocks(data.explanationBlocks);
+      recordReword(paragraph.id);
+      refreshQuotas(paragraph.id);
+    } catch (err) {
+      console.error("explain: /api/reword недоступен", err);
+      setRewordError("Не получилось объяснить иначе — попробуй ещё раз");
+    } finally {
+      setIsRewording(false);
+    }
+  };
 
   const speak = async () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -86,7 +135,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
 
   const askQuestion = async () => {
     const q = question.trim();
-    if (!q) return;
+    if (!q || !askQuota.allowed) return;
     setIsAsking(true);
     setAskError(null);
     try {
@@ -99,6 +148,8 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       setQaHistory((prev) => [...prev, { question: q, answer: data.answer }]);
       setQuestion("");
+      recordAsk(paragraph.id);
+      refreshQuotas(paragraph.id);
     } catch (err) {
       console.error("explain: /api/ask недоступен", err);
       setAskError("Не получилось ответить — попробуй ещё раз");
@@ -152,7 +203,7 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
             <Heading level={1}>Вот что здесь написано</Heading>
             <Card padding={5}>
               <VStack gap={4}>
-                {paragraph.explanationBlocks.map((block, i) => (
+                {explanationBlocks.map((block, i) => (
                   <HStack key={i} gap={2} vAlign="start">
                     <Icon icon="info" size="sm" color="secondary" />
                     <Text type="large">{withHighlightedTerms(block, paragraph.keyTerms)}</Text>
@@ -160,12 +211,41 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
                 ))}
               </VStack>
             </Card>
-            <Button
-              label={isSpeaking ? "Остановить" : "Прочитать вслух"}
-              variant="secondary"
-              icon={<Icon icon={isSpeaking ? "stop" : "microphone"} />}
-              onClick={speak}
-            />
+            <HStack gap={2}>
+              <Button
+                label={isSpeaking ? "Остановить" : "Прочитать вслух"}
+                variant="secondary"
+                icon={<Icon icon={isSpeaking ? "stop" : "microphone"} />}
+                onClick={speak}
+              />
+              <Button
+                label={isRewording ? "Объясняю иначе…" : "Объясни иначе"}
+                variant="ghost"
+                isLoading={isRewording}
+                isDisabled={!rewordQuota.allowed}
+                tooltip={
+                  rewordQuota.allowed
+                    ? undefined
+                    : proActive
+                      ? undefined
+                      : "Бесплатно — один раз на параграф. Без лимита — в Эхо Про"
+                }
+                onClick={rewordExplanation}
+              />
+            </HStack>
+            {!rewordQuota.allowed && !proActive && (
+              <Banner
+                status="info"
+                title="Бесплатный лимит на этот параграф закончился"
+                description="Один раз объяснить иначе — бесплатно. Без ограничений — в Эхо Про."
+                endContent={
+                  <Link href="/pro">
+                    <Button label="Про" variant="secondary" size="sm" />
+                  </Link>
+                }
+              />
+            )}
+            {rewordError && <Banner status="error" title="Не получилось" description={rewordError} />}
           </VStack>
 
           {paragraph.termCards && paragraph.termCards.length > 0 && (
@@ -199,7 +279,9 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
           <VStack gap={3}>
             <Heading level={2}>Есть вопрос?</Heading>
             <Text type="supporting" color="secondary">
-              Спроси что угодно про этот параграф — объясним ещё раз по-другому
+              {proActive
+                ? "Спроси что угодно про этот параграф — объясним ещё раз по-другому"
+                : `Спроси что угодно про этот параграф — осталось ${askQuota.remaining} из 3 бесплатных вопросов сегодня`}
             </Text>
             {qaHistory.length > 0 && (
               <VStack gap={3}>
@@ -218,6 +300,18 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
               </VStack>
             )}
             {askError && <Banner status="error" title="Не получилось" description={askError} />}
+            {!askQuota.allowed && (
+              <Banner
+                status="info"
+                title="Бесплатные вопросы на сегодня закончились"
+                description="В Эхо Про — без дневного лимита, спрашивай, пока реально не поймёшь."
+                endContent={
+                  <Link href="/pro">
+                    <Button label="Про" variant="secondary" size="sm" />
+                  </Link>
+                }
+              />
+            )}
             <HStack gap={2}>
               <div className={styles.askInput}>
                 <TextInput
@@ -226,13 +320,19 @@ export default function ExplainPage({ params }: { params: Promise<{ id: string }
                   value={question}
                   onChange={setQuestion}
                   placeholder="Например: а зачем это вообще нужно?"
-                  isDisabled={isAsking}
+                  isDisabled={isAsking || !askQuota.allowed}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") askQuestion();
                   }}
                 />
               </div>
-              <Button label="Спросить" variant="primary" isLoading={isAsking} onClick={askQuestion} />
+              <Button
+                label="Спросить"
+                variant="primary"
+                isLoading={isAsking}
+                isDisabled={!askQuota.allowed}
+                onClick={askQuestion}
+              />
             </HStack>
           </VStack>
 

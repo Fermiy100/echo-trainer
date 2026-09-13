@@ -14,3 +14,9 @@
   height: 110px;
   width: 140px;
 }
+
+.plainLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}

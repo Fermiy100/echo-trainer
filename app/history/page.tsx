@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
@@ -8,10 +9,14 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Center } from "@astryxdesign/core/Center";
+import { Icon } from "@astryxdesign/core/Icon";
+import { StackItem } from "@astryxdesign/core/Stack";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { AppFrame } from "@/components/shell/AppFrame";
 import { StreakFlame, PagesStack, WelcomeIllustration } from "@/components/ui/illustrations";
 import { useStudentSummary } from "@/lib/hooks/useStudentSummary";
+import { getStudentId } from "@/lib/client-id";
+import { isPro } from "@/lib/pro";
 import styles from "./page.module.css";
 
 function formatDate(iso: string) {
@@ -20,6 +25,27 @@ function formatDate(iso: string) {
 
 export default function HistoryPage() {
   const { isLoading, entries, totalParagraphs, streakDays } = useStudentSummary();
+  const [proActive, setProActive] = useState(false);
+  const [parentCode, setParentCode] = useState<string | null>(null);
+  const [parentCodeError, setParentCodeError] = useState(false);
+
+  useEffect(() => {
+    setProActive(isPro());
+    fetch("/api/parent-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: getStudentId() }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.code) setParentCode(data.code);
+        else setParentCodeError(true);
+      })
+      .catch((err) => {
+        console.error("history: /api/parent-code недоступен", err);
+        setParentCodeError(true);
+      });
+  }, []);
 
   return (
     <AppFrame active="history">
@@ -56,6 +82,41 @@ export default function HistoryPage() {
             </HStack>
           </Card>
         </div>
+
+        <Link href="/weak-spots" className={styles.plainLink}>
+          <Card padding={4} elevation="low">
+            <HStack gap={3} vAlign="center">
+              <Icon icon="warning" color={proActive ? "accent" : "secondary"} />
+              <StackItem size="fill">
+                <VStack gap={0}>
+                  <Text type="body" weight="bold">
+                    Карта слабых мест
+                  </Text>
+                  <Text type="supporting" size="xsm">
+                    {proActive ? "Что чаще всего не запоминается" : "Часть Эхо Про — посмотреть"}
+                  </Text>
+                </VStack>
+              </StackItem>
+              <Icon icon="chevronRight" color="secondary" size="sm" />
+            </HStack>
+          </Card>
+        </Link>
+
+        {parentCode && !parentCodeError && (
+          <Card padding={4} elevation="low">
+            <VStack gap={2}>
+              <Text type="body" weight="bold">
+                Код для родителя
+              </Text>
+              <Text type="supporting" size="xsm">
+                Покажи этот код родителю — по нему видно тот же прогресс, без пароля и без установки
+              </Text>
+              <Text type="display-2" hasTabularNumbers color="accent" justify="center">
+                {parentCode}
+              </Text>
+            </VStack>
+          </Card>
+        )}
 
         <VStack gap={3}>
           <Heading level={2}>Пройденные параграфы</Heading>

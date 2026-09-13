@@ -102,3 +102,19 @@ export async function getAnswer(explanationText: string, question: string): Prom
     throw err;
   }
 }
+
+export async function getReword(originalText: string): Promise<string[]> {
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      return await openai.rewordExplanation(originalText);
+    } catch (err) {
+      console.error("reword: OpenAI недоступен, пробую NIM", err);
+    }
+  }
+  try {
+    return await nim.rewordExplanation(originalText);
+  } catch (err) {
+    console.error("reword: NIM тоже недоступен", err);
+    throw err;
+  }
+}

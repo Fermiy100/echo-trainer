@@ -41,8 +41,11 @@ export async function POST(req: NextRequest) {
     // Если модель не распознала тему — не теряем попытку молча, пишем с
     // заглушкой, чтобы прогресс ученика не пропадал из истории без следа.
     const safeSubject = typeof subject === "string" && subject.trim() ? subject : "Без темы";
+    // Сохраняем не только счётчик, но и САМИ пропущенные идеи текстом — это и
+    // есть карта слабых мест для "Эхо Про" (см. lib/db.ts getWeakSpots).
+    const missedPoints = keyPoints.filter((_, i) => !result.coveredIndices.includes(i));
     try {
-      await saveAttempt(studentId, safeSubject, result.coveredIndices.length, keyPoints.length);
+      await saveAttempt(studentId, safeSubject, result.coveredIndices.length, keyPoints.length, missedPoints);
     } catch (err) {
       // История — не критично для ответа пользователю, не роняем запрос из-за неё
       console.error("verify: не удалось сохранить попытку в историю", err);

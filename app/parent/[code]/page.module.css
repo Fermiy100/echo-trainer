@@ -1,0 +1,17 @@
+.page {
+  min-height: 100dvh;
+  background: var(--color-background-body);
+  padding-top: var(--spacing-6, 32px);
+}
+
+.shell {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-3, 12px);
+}
