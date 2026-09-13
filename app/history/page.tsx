@@ -15,7 +15,7 @@ import { List, ListItem } from "@astryxdesign/core/List";
 import { AppFrame } from "@/components/shell/AppFrame";
 import { StreakFlame, PagesStack, WelcomeIllustration } from "@/components/ui/illustrations";
 import { useStudentSummary } from "@/lib/hooks/useStudentSummary";
-import { getStudentId } from "@/lib/client-id";
+import { getStudentId, isYandexLinked, getDisplayName, logout } from "@/lib/client-id";
 import { isPro } from "@/lib/pro";
 import { pluralizeRu } from "@/lib/pluralize";
 import styles from "./page.module.css";
@@ -30,9 +30,13 @@ export default function HistoryPage() {
   const [weakSpotCount, setWeakSpotCount] = useState<number | null>(null);
   const [parentCode, setParentCode] = useState<string | null>(null);
   const [parentCodeError, setParentCodeError] = useState(false);
+  const [linked, setLinked] = useState(false);
+  const [displayName, setDisplayNameState] = useState<string | null>(null);
 
   useEffect(() => {
     setProActive(isPro());
+    setLinked(isYandexLinked());
+    setDisplayNameState(getDisplayName());
     fetch(`/api/weak-spots?studentId=${encodeURIComponent(getStudentId())}`)
       .then((res) => res.json())
       .then((data) => setWeakSpotCount((data.spots ?? []).length))
@@ -59,6 +63,52 @@ export default function HistoryPage() {
         <Heading level={1} type="display-2">
           История
         </Heading>
+
+        {linked ? (
+          <Card padding={4} elevation="low">
+            <HStack gap={3} vAlign="center">
+              <Icon icon="success" color="accent" />
+              <StackItem size="fill">
+                <VStack gap={0}>
+                  <Text type="body" weight="bold">
+                    {displayName ? `Вы вошли как ${displayName}` : "Вход через Яндекс выполнен"}
+                  </Text>
+                  <Text type="supporting" size="xsm">
+                    История видна с любого устройства с этим входом
+                  </Text>
+                </VStack>
+              </StackItem>
+              <Button
+                label="Выйти"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  logout();
+                  window.location.reload();
+                }}
+              />
+            </HStack>
+          </Card>
+        ) : (
+          <Link href="/api/auth/yandex/login" prefetch={false} className={styles.plainLink}>
+            <Card padding={4} elevation="low">
+              <HStack gap={3} vAlign="center">
+                <Icon icon="externalLink" color="accent" />
+                <StackItem size="fill">
+                  <VStack gap={0}>
+                    <Text type="body" weight="bold">
+                      Войти через Яндекс
+                    </Text>
+                    <Text type="supporting" size="xsm">
+                      Чтобы видеть эту историю с телефона, компьютера — с чего угодно
+                    </Text>
+                  </VStack>
+                </StackItem>
+                <Icon icon="chevronRight" color="secondary" size="sm" />
+              </HStack>
+            </Card>
+          </Link>
+        )}
 
         <div className={styles.statsGrid}>
           <Card padding={4} elevation="low">
