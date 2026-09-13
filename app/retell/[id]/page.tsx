@@ -99,12 +99,14 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   // маунта, когда сервер ни при чём.
   const [speechSupported, setSpeechSupported] = useState(false);
   // Резервная запись звука (для Groq Whisper) — идёт параллельно с Web Speech,
-  // где он есть, и заменяет его целиком там, где его нет (Safari/iOS).
+  // где он есть, и заменяет его целиком там, где его нет (Safari/iOS). Никакой
+  // ручной кнопки "расшифровать точнее" нет — если бы она была, ей бы жали
+  // всегда просто на всякий случай. Вместо этого резерв включается сам собой,
+  // молча, ровно тогда, когда Web Speech не смог ничего распознать.
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [transcribing, setTranscribing] = useState(false);
+  const audioStopPromiseRef = useRef<Promise<Blob | null> | null>(null);
 
   const focusIndices = parseFocusIndices(searchParams.get("focus"), paragraph.keyPoints.length);
   const hintPoints = focusIndices.map((i) => paragraph.keyPoints[i]).filter(Boolean);
@@ -153,11 +155,28 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   // Единая точка фиксации текста: включает и подтверждённую (final) речь, и
   // ещё не подтверждённый последний кусок (interim) — некоторые браузеры так и
   // не помечают самую последнюю фразу как isFinal перед остановкой, и раньше
-  // она просто пропадала бесследно.
-  const commitTranscript = (message?: string) => {
+  // она просто пропадала бесследно. Если Web Speech в итоге не распознал
+  // вообще ничего (мисс-распознавание, сбой, отвалившееся соединение) —
+  // молча пробуем резервную расшифровку через Groq, не спрашивая ученика:
+  // кнопку "на всякий случай" жали бы все подряд, а так резерв включается
+  // ровно тогда, когда он реально нужен.
+  const commitTranscript = async (message?: string) => {
     const combined = `${transcriptRef.current} ${interimRef.current}`.trim();
-    setFinalText(combined);
     interimRef.current = "";
+    let text = combined;
+    if (!text) {
+      const blob = audioStopPromiseRef.current ? await audioStopPromiseRef.current : null;
+      audioStopPromiseRef.current = null;
+      if (blob) {
+        setPhase("transcribing");
+        try {
+          text = await transcribeWithGroq(blob);
+        } catch (err) {
+          console.error("retell: резервная расшифровка недоступна", err);
+        }
+      }
+    }
+    setFinalText(text);
     if (message) setErrorMessage(message);
     setPhase("reviewing");
   };
@@ -209,7 +228,6 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
   const finishWithoutSpeechRecognition = async () => {
     setPhase("transcribing");
     const blob = await stopAudioCapture();
-    setAudioBlob(blob);
     if (!blob) {
       setErrorMessage("Не удалось записать звук — впиши пересказ текстом");
       setPhase("reviewing");
@@ -232,7 +250,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
     setLiveText("");
     setElapsed(0);
     setErrorMessage(null);
-    setAudioBlob(null);
+    audioStopPromiseRef.current = null;
     // Резерв стартует всегда, параллельно с Web Speech (если он есть) — не
     // блокирует и не мешает основному сценарию, если недоступен.
     startAudioCapture();
@@ -269,6 +287,9 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
         // доступа к микрофону и т.д.) — честно останавливаем.
         if (e.error === "no-speech" || e.error === "aborted") return;
         recognitionRef.current = null;
+        // Останавливаем и резервную запись здесь же — иначе commitTranscript
+        // не увидит готовый блок звука и не сможет подстраховаться через Groq.
+        audioStopPromiseRef.current = stopAudioCapture();
         commitTranscript(
           e.error === "not-allowed" || e.error === "service-not-allowed"
             ? "Нет доступа к микрофону — разреши его в браузере или впиши пересказ текстом"
@@ -285,6 +306,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
             recognition.start();
           } catch (err) {
             console.error("retell: не удалось перезапустить распознавание", err);
+            audioStopPromiseRef.current = stopAudioCapture();
             commitTranscript();
           }
           return;
@@ -320,9 +342,10 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
     wasStoppedByUserRef.current = true;
     recognitionRef.current.stop();
     recognitionRef.current = null;
-    // Резервная запись — на будущее (кнопка "расшифровать точнее" на экране
-    // проверки), не блокирует и не участвует в основном сценарии ниже.
-    stopAudioCapture().then(setAudioBlob);
+    // Резервную запись останавливаем сразу — commitTranscript ниже дождётся
+    // этот же промис и молча подстрахуется через Groq, если Web Speech в
+    // итоге не распознал ни слова.
+    audioStopPromiseRef.current = stopAudioCapture();
     // Текст фиксируется в onend (см. выше), а не здесь — .stop() завершает
     // сессию асинхронно, и последний ещё не подтверждённый кусок речи мог
     // прийти уже ПОСЛЕ немедленного чтения transcriptRef в этом обработчике.
@@ -521,31 +544,6 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
               isLoading={phase === "submitting"}
               onClick={submit}
             />
-            {/* Резервная расшифровка звука, которая уже записана в фоне —
-                полезна и когда Web Speech распознал плохо, и как ретрай, если
-                первая попытка (или сама Groq) не сработала. */}
-            {audioBlob && (
-              <Button
-                label={transcribing ? "Расшифровываю…" : "Расшифровать точнее (резерв)"}
-                variant="ghost"
-                width="100%"
-                isLoading={transcribing}
-                isDisabled={phase === "submitting" || transcribing}
-                onClick={async () => {
-                  setTranscribing(true);
-                  setErrorMessage(null);
-                  try {
-                    const text = await transcribeWithGroq(audioBlob);
-                    setFinalText(text);
-                  } catch (err) {
-                    console.error("retell: резервная расшифровка недоступна", err);
-                    setErrorMessage("Резервная расшифровка сейчас недоступна — попробуй позже");
-                  } finally {
-                    setTranscribing(false);
-                  }
-                }}
-              />
-            )}
             <Button
               label="Записать заново"
               variant="ghost"
