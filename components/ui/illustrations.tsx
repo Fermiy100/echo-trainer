@@ -218,6 +218,68 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
+// Иконки фич "Эхо Про" — тот же язык тонких линий на var(--color-accent), что
+// и у остальных меток в этом файле, вместо родового набора "success"-галочек
+// (см. чат про монетизацию: список должен выглядеть так, что за него хочется
+// платить, а не как отчёт о статусах).
+export function PhotosProMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="7" y="7" width="13" height="13" rx="2.5" fill="var(--color-background-surface)" stroke="var(--color-accent)" strokeWidth="1.8" />
+      <path d="M10.5 4.5 H17.5" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
+      <path d="M4.5 8 V15" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
+      <path d="M10.5 16.5 L13 13.5 L15 15.5 L17 12.5" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function InfinityProMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M6.8 9.2 C4.4 9.6 4.6 14.6 7.1 14.8 C9.4 15 10.6 9 13 9 C15.4 9 17 9.4 17.2 12 C17 9.4 15.4 9 13 9 C10.6 9 9.4 15 7.1 14.8 C4.6 14.6 4.4 9.6 6.8 9.2 Z"
+        stroke="var(--color-accent)"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function RewordProMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 8.5 C5 6.6 6.6 5 8.5 5 H14" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 2.5 L14.5 5 L12 7.5" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 15.5 C19 17.4 17.4 19 15.5 19 H10" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 21.5 L9.5 19 L12 16.5" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function WeakSpotProMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="8" stroke="var(--color-accent)" strokeWidth="1.8" opacity="0.35" />
+      <circle cx="12" cy="12" r="4.5" stroke="var(--color-accent)" strokeWidth="1.8" opacity="0.65" />
+      <circle cx="12" cy="12" r="1.6" fill="var(--color-accent)" />
+    </svg>
+  );
+}
+
+export function ParentProMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="9" cy="7.5" r="2.6" stroke="var(--color-accent)" strokeWidth="1.8" />
+      <path d="M4 19 C4 15.5 6.2 13.5 9 13.5 C11.8 13.5 14 15.5 14 19" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M16.3 9.2 C16.9 8.4 18.4 8.6 18.6 9.8 C18.8 11 17.4 12.2 16.3 13 C15.2 12.2 13.8 11 14 9.8 C14.2 8.6 15.7 8.4 16.3 9.2 Z"
+        fill="var(--color-accent)"
+      />
+    </svg>
+  );
+}
+
 export function HomeMark({ className, active }: { className?: string; active?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">

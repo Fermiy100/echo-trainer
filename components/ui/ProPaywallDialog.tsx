@@ -5,20 +5,20 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Layout, LayoutContent } from "@astryxdesign/core/Layout";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
-import { List, ListItem } from "@astryxdesign/core/List";
-import { Icon } from "@astryxdesign/core/Icon";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Banner } from "@astryxdesign/core/Banner";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { activatePro } from "@/lib/pro";
+import { PhotosProMark, InfinityProMark, RewordProMark, WeakSpotProMark, ParentProMark } from "@/components/ui/illustrations";
 import styles from "./ProPaywallDialog.module.css";
 
 const FEATURES = [
-  "Безлимитные вопросы ИИ по этому параграфу",
-  "«Объясни иначе» — сколько угодно раз",
-  "Карта слабых мест по всем предметам",
-  "Доступ для родителя без отдельной подписки",
+  { Mark: PhotosProMark, title: "До 5 фото за раз" },
+  { Mark: InfinityProMark, title: "Безлимитные вопросы ИИ" },
+  { Mark: RewordProMark, title: "«Объясни иначе» без лимита" },
+  { Mark: WeakSpotProMark, title: "Карта слабых мест" },
+  { Mark: ParentProMark, title: "Доступ для родителя" },
 ];
 
 // Момент, когда бесплатный лимит реально упирается в стену — не тихая
@@ -58,11 +58,18 @@ export function ProPaywallDialog({
         content={
           <LayoutContent>
             <VStack gap={4} padding={5}>
-              <List>
-                {FEATURES.map((f) => (
-                  <ListItem key={f} label={f} startContent={<Icon icon="success" color="accent" />} />
+              <div className={styles.featureGrid}>
+                {FEATURES.map(({ Mark, title }) => (
+                  <div key={title} className={styles.featureCell}>
+                    <div className={styles.iconBadge}>
+                      <Mark className={styles.iconMark} />
+                    </div>
+                    <Text type="supporting" weight="bold">
+                      {title}
+                    </Text>
+                  </div>
                 ))}
-              </List>
+              </div>
               <HStack gap={4}>
                 <VStack gap={0}>
                   <Text type="large" hasTabularNumbers>

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Card } from "@astryxdesign/core/Card";
-import { List, ListItem } from "@astryxdesign/core/List";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -14,25 +13,15 @@ import { Button } from "@astryxdesign/core/Button";
 import { Banner } from "@astryxdesign/core/Banner";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { isPro, activatePro, deactivatePro, DEMO_PRO_CODE } from "@/lib/pro";
+import { PhotosProMark, InfinityProMark, RewordProMark, WeakSpotProMark, ParentProMark } from "@/components/ui/illustrations";
 import styles from "./page.module.css";
 
 const FEATURES = [
-  {
-    title: "Безлимитные вопросы ИИ",
-    detail: "Спрашивай про непонятное место, пока реально не поймёшь — не 1–2 раза в день, как бесплатно",
-  },
-  {
-    title: "«Объясни иначе»",
-    detail: "Не зашло с первого раза — мгновенно другое объяснение: проще, с другим примером",
-  },
-  {
-    title: "Карта слабых мест",
-    detail: "Что не запомнилось за всю четверть по всем предметам — не только по последнему параграфу",
-  },
-  {
-    title: "Доступ для родителя",
-    detail: "Тот же прогресс виден по коду приглашения — без отдельной подписки для него",
-  },
+  { Mark: PhotosProMark, title: "До 5 фото за раз", detail: "Вместо 3 бесплатных — длинный параграф не разбивается на две попытки" },
+  { Mark: InfinityProMark, title: "Безлимитные вопросы ИИ", detail: "Спрашивай про непонятное место, пока реально не поймёшь" },
+  { Mark: RewordProMark, title: "«Объясни иначе»", detail: "Не зашло с первого раза — мгновенно другое объяснение" },
+  { Mark: WeakSpotProMark, title: "Карта слабых мест", detail: "Что не запомнилось за всю четверть по всем предметам сразу" },
+  { Mark: ParentProMark, title: "Доступ для родителя", detail: "Тот же прогресс по коду приглашения — без отдельной подписки" },
 ];
 
 export default function ProPage() {
@@ -70,33 +59,52 @@ export default function ProPage() {
 
       <div className={styles.shell}>
         <VStack gap={6} padding={5}>
-          <VStack gap={2}>
-            <Heading level={1}>Репетитор, а не игра</Heading>
+          <div className={styles.hero}>
+            <div className={styles.eyebrow}>
+              <Text type="label" color="accent" weight="bold">
+                ЛИЧНЫЙ ИИ-РЕПЕТИТОР
+              </Text>
+            </div>
+            <div className={styles.heroPrice}>
+              <Text type="display-1" hasTabularNumbers as="span">
+                149 ₽
+              </Text>
+              <Text type="body" color="secondary" as="span">
+                /мес
+              </Text>
+            </div>
             <Text type="body" color="secondary">
-              Не геймификация ради геймификации — четыре вещи, за которые реально стоит платить, если
-              домашка и правда сложная в этой четверти.
+              Меньше пятёрки в день — а помогает с домашкой каждый раз, когда что-то не заходит с первого
+              объяснения.
             </Text>
+          </div>
+
+          <VStack gap={2}>
+            {FEATURES.map(({ Mark, title, detail }) => (
+              <Card key={title} padding={4} elevation="low">
+                <HStack gap={3} vAlign="center">
+                  <div className={styles.iconBadge}>
+                    <Mark className={styles.iconMark} />
+                  </div>
+                  <VStack gap={0}>
+                    <Text type="body" weight="bold">
+                      {title}
+                    </Text>
+                    <Text type="supporting" size="xsm">
+                      {detail}
+                    </Text>
+                  </VStack>
+                </HStack>
+              </Card>
+            ))}
           </VStack>
 
-          <Card padding={0}>
-            <List>
-              {FEATURES.map((f) => (
-                <ListItem
-                  key={f.title}
-                  label={f.title}
-                  description={f.detail}
-                  startContent={<Icon icon="success" color="accent" />}
-                />
-              ))}
-            </List>
-          </Card>
-
           <Card padding={5} elevation="low">
-            <VStack gap={2}>
+            <VStack gap={3}>
               <Text type="supporting" color="secondary">
                 Для сравнения
               </Text>
-              <HStack gap={4}>
+              <HStack gap={5}>
                 <VStack gap={0}>
                   <Text type="large" hasTabularNumbers>
                     700–1500 ₽
@@ -122,34 +130,37 @@ export default function ProPage() {
               <Banner
                 status="success"
                 title={justActivated ? "Про активирован!" : "Про уже активен на этом устройстве"}
-                description="Безлимитные вопросы, «объясни иначе» и карта слабых мест открыты."
+                description="Все пять фич выше открыты."
               />
               <Button label="Отключить Про (для теста)" variant="ghost" onClick={() => { deactivatePro(); setActive(false); }} />
             </VStack>
           ) : (
-            <VStack gap={3}>
-              <Banner
-                status="info"
-                title="Оплата пока демонстрационная"
-                description="Настоящего платёжного шлюза ещё нет — у школьного проекта пока нет для этого юрлица. Код ниже включает Про по-настоящему, просто без денег."
-              />
-              {error && <Banner status="error" title="Не получилось" description={error} />}
-              <HStack gap={2}>
-                <div className={styles.codeInput}>
-                  <TextInput
-                    label="Код активации"
-                    isLabelHidden
-                    value={code}
-                    onChange={setCode}
-                    placeholder={`Например: ${DEMO_PRO_CODE}`}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submit();
-                    }}
-                  />
-                </div>
-                <Button label="Активировать" variant="primary" onClick={submit} />
-              </HStack>
-            </VStack>
+            <Card padding={5} variant="orange">
+              <VStack gap={3}>
+                <Heading level={2}>Активировать</Heading>
+                <Banner
+                  status="info"
+                  title="Оплата пока демонстрационная"
+                  description="Юрлица под школьный проект ещё нет — код ниже включает Про по-настоящему, просто без денег."
+                />
+                {error && <Banner status="error" title="Не получилось" description={error} />}
+                <HStack gap={2}>
+                  <div className={styles.codeInput}>
+                    <TextInput
+                      label="Код активации"
+                      isLabelHidden
+                      value={code}
+                      onChange={setCode}
+                      placeholder={`Например: ${DEMO_PRO_CODE}`}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submit();
+                      }}
+                    />
+                  </div>
+                  <Button label="Активировать" variant="primary" onClick={submit} />
+                </HStack>
+              </VStack>
+            </Card>
           )}
         </VStack>
       </div>

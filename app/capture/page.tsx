@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { VStack } from "@astryxdesign/core/VStack";
@@ -14,9 +14,12 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { Banner } from "@astryxdesign/core/Banner";
 import { storeParagraph } from "@/lib/paragraph-store";
 import { getInterest } from "@/lib/profile";
+import { isPro } from "@/lib/pro";
+import { ProPaywallDialog } from "@/components/ui/ProPaywallDialog";
 import styles from "./page.module.css";
 
-const MAX_PHOTOS = 5;
+const FREE_MAX_PHOTOS = 3;
+const PRO_MAX_PHOTOS = 5;
 
 function PlusIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -78,14 +81,28 @@ export default function CapturePage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Как и везде — на сервере localStorage нет, поэтому Про-статус читаем
+  // только после маунта, иначе сервер и клиент разошлись бы в первом рендере.
+  const [proActive, setProActive] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
+  useEffect(() => {
+    setProActive(isPro());
+  }, []);
+
+  const maxPhotos = proActive ? PRO_MAX_PHOTOS : FREE_MAX_PHOTOS;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // разрешает выбрать тот же файл повторно
     if (!file) return;
+    if (photos.length >= maxPhotos) {
+      setPaywallOpen(true);
+      return;
+    }
     const dataUrl = await resizeToDataUrl(file);
     setError(null);
-    setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, dataUrl]));
+    setPhotos((prev) => (prev.length >= maxPhotos ? prev : [...prev, dataUrl]));
   };
 
   const removePhoto = (index: number) => {
@@ -156,7 +173,8 @@ export default function CapturePage() {
               </Heading>
               <Text type="body" color="secondary" justify="center">
                 Постарайся уместить весь параграф в кадр, без бликов. Не поместился в один
-                кадр — сфотографируй по частям, можно до {MAX_PHOTOS} фото.
+                кадр — сфотографируй по частям, можно до {maxPhotos} фото
+                {!proActive && ` (в Про — до ${PRO_MAX_PHOTOS})`}.
               </Text>
             </VStack>
             <VStack gap={2} hAlign="center">
@@ -194,16 +212,16 @@ export default function CapturePage() {
                 </button>
               </div>
             ))}
-            {photos.length < MAX_PHOTOS && (
+            {photos.length < PRO_MAX_PHOTOS && (
               <button
                 type="button"
                 className={styles.thumbAdd}
-                onClick={() => inputRef.current?.click()}
+                onClick={() => (photos.length >= maxPhotos ? setPaywallOpen(true) : inputRef.current?.click())}
                 disabled={isSubmitting}
               >
-                <Icon icon={PlusIcon} color="secondary" />
+                <Icon icon={photos.length >= maxPhotos ? "info" : PlusIcon} color="secondary" />
                 <Text type="supporting" color="secondary">
-                  Добавить
+                  {photos.length >= maxPhotos ? "Ещё фото — в Про" : "Добавить"}
                 </Text>
               </button>
             )}
@@ -230,6 +248,13 @@ export default function CapturePage() {
           </VStack>
         </VStack>
       )}
+
+      <ProPaywallDialog
+        isOpen={paywallOpen}
+        onOpenChange={setPaywallOpen}
+        reason={`Бесплатно — до ${FREE_MAX_PHOTOS} фото на параграф. Больше страниц за раз — в Про.`}
+        onActivated={() => setProActive(true)}
+      />
     </div>
   );
 }

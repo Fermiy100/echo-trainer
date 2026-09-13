@@ -1,3 +1,34 @@
 .codeInput {
   flex: 1;
 }
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-3, 12px);
+}
+
+.featureCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 8px);
+  padding: var(--spacing-3, 12px);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+}
+
+.iconBadge {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-element);
+  background: var(--color-background-orange, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconMark {
+  width: 18px;
+  height: 18px;
+}

@@ -110,14 +110,32 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
 
   const focusIndices = parseFocusIndices(searchParams.get("focus"), paragraph.keyPoints.length);
   const hintPoints = focusIndices.map((i) => paragraph.keyPoints[i]).filter(Boolean);
+  // Раньше все подсказки были видны сразу — это как раз то, чего пересказ и
+  // должен избегать: ученик читает готовый ответ вместо того, чтобы вспомнить
+  // сам. Теперь подсказки открываются по одной, только по явному запросу.
+  const [revealedHintCount, setRevealedHintCount] = useState(0);
+  const hintPanel = mode !== "battle" && hintPoints.length > 0 && (
+    <VStack gap={2} width="100%">
+      {hintPoints.slice(0, revealedHintCount).map((point, i) => (
+        <HintChip key={i} text={point} peekable={mode === "recall"} />
+      ))}
+      {revealedHintCount < hintPoints.length && (
+        <Button
+          label={revealedHintCount === 0 ? "Хочу подсказку" : "Ещё подсказку"}
+          variant="ghost"
+          onClick={() => setRevealedHintCount((c) => Math.min(c + 1, hintPoints.length))}
+        />
+      )}
+    </VStack>
+  );
   const modeCopy: { heading: string; subtitle: string } = {
     guided: {
       heading: "Готов пересказать?",
-      subtitle: "Расскажи, что запомнил, своими словами — можешь опираться на подсказки ниже",
+      subtitle: "Расскажи, что запомнил, своими словами — не вспоминается, попроси подсказку",
     },
     recall: {
       heading: "Закрой пробелы",
-      subtitle: "В прошлый раз это осталось за кадром — вспомни, подглядывая по словечку, если совсем забыл",
+      subtitle: "В прошлый раз это осталось за кадром — попробуй сам, а если совсем забыл, попроси подсказку",
     },
     battle: {
       heading: "Отвечаешь у доски",
@@ -430,13 +448,7 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
               {modeCopy.subtitle}
             </Text>
           </VStack>
-          {mode !== "battle" && hintPoints.length > 0 && (
-            <VStack gap={2} width="100%">
-              {hintPoints.map((point, i) => (
-                <HintChip key={i} text={point} peekable={mode === "recall"} />
-              ))}
-            </VStack>
-          )}
+          {hintPanel}
           <div className={styles.recordButtonWrap}>
             <IconButton
               label="Начать запись"
@@ -485,17 +497,10 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
             </Text>
           </div>
 
-          {/* Раньше подсказки показывались только на экране "Готов пересказать?"
-              и пропадали, как только начиналась запись — то есть именно тогда,
-              когда они нужнее всего. Теперь они остаются на экране и во время
-              самой записи (кроме боевого режима, где их нет намеренно). */}
-          {mode !== "battle" && hintPoints.length > 0 && (
-            <VStack gap={2} width="100%">
-              {hintPoints.map((point, i) => (
-                <HintChip key={i} text={point} peekable={mode === "recall"} />
-              ))}
-            </VStack>
-          )}
+          {/* Тот же список, что и на экране "Готов пересказать?" — открытые
+              подсказки не пропадают, когда начинается запись, а состояние
+              "сколько уже открыто" переносится вместе с hintPanel. */}
+          {hintPanel}
 
           <IconButton
             label="Остановить запись"
@@ -549,7 +554,12 @@ export default function RetellPage({ params }: { params: Promise<{ id: string }>
               variant="ghost"
               width="100%"
               isDisabled={phase === "submitting"}
-              onClick={startRecording}
+              onClick={() => {
+                // Настоящий новый заход — открытые подсказки не должны
+                // достаться "бесплатно" во второй попытке того же пересказа.
+                setRevealedHintCount(0);
+                startRecording();
+              }}
             />
           </VStack>
         </VStack>
